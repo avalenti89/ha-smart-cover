@@ -1,0 +1,152 @@
+recalibrate_manual:
+  name: Recalibrate manually
+  description: >-
+    Immediately runs the recalibration cycle (close/open/restore),
+    ignoring both the "recalibration enabled" toggle and the rain
+    limits — meant for when the user checks the weather themselves before
+    running it.
+  target:
+    entity:
+      integration: smart_cover
+
+request_recalibration:
+  name: Request recalibration
+  description: >-
+    Entry point for automations/routines: asks for a recalibration, but
+    the entity decides whether to actually run it, based on the
+    "recalibration enabled" toggle and the current rain/window safety.
+  target:
+    entity:
+      integration: smart_cover
+
+request_position:
+  name: Request position
+  description: >-
+    Entry point for automations/routines: asks the cover to reach
+    position, but the entity decides how much of that to honor right
+    now, based on the rain limit currently in force. A request within
+    the limit — including one that closes further than it — is honored
+    in full immediately. A request above it is only partially honored
+    now, and the rest is remembered (see the pending_requested_position
+    attribute) to be chased automatically the next time the limit
+    relaxes, with no second call needed. A newer request_position call
+    always replaces whatever was still pending — it does not
+    accumulate. For unconditional, unclamped movement (e.g. from the
+    UI or an app card), use the standard
+    open_cover/close_cover/set_cover_position instead.
+  target:
+    entity:
+      integration: smart_cover
+  fields:
+    position:
+      name: Position
+      description: Requested position (0 = closed, 100 = open), a FINAL/calibrated value.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+
+set_recalibration_enabled:
+  name: Enable/disable recalibration
+  description: >-
+    Turns automatic recalibration (as requested by automations via
+    request_recalibration) on or off. Does not affect recalibrate_manual.
+  target:
+    entity:
+      integration: smart_cover
+  fields:
+    enabled:
+      name: Enabled
+      description: true to enable, false to disable.
+      required: true
+      selector:
+        boolean:
+
+set_rain_control_enabled:
+  name: Enable/disable rain control
+  description: >-
+    Turns the automatic rain position limits on or off. If re-enabled
+    while it is already raining on an open window, applies the limit
+    immediately.
+  target:
+    entity:
+      integration: smart_cover
+  fields:
+    enabled:
+      name: Enabled
+      description: true to enable, false to disable.
+      required: true
+      selector:
+        boolean:
+
+activate_rain_protection:
+  name: Activate rain protection now
+  description: >-
+    Immediately applies the rain limit the window's current position
+    calls for, regardless of the actual rain sensor/weather state
+    (manual override). With the window closed there is no limit, so
+    nothing moves.
+  target:
+    entity:
+      integration: smart_cover
+
+close_completely:
+  name: Close completely
+  description: >-
+    Always targets the cover's true raw 0% — the extra travel that
+    seals the slats — ignoring closed_position_offset entirely. Unlike
+    the regular close, which stops where the cover looks closed.
+  target:
+    entity:
+      integration: smart_cover
+
+ramp_to_position:
+  name: Ramp to position
+  description: >-
+    Gradually moves the cover from start_position (default: current
+    position) to position, starting now and spread out until end_time,
+    in discrete steps. While it is raining, every step is capped to the
+    limit the window's position calls for before being commanded: the
+    ramp never opens the cover past that limit, but a step that is more
+    closed than the limit still runs. Any explicit command
+    (open/close/set_position/stop/recalibration, or a second
+    ramp_to_position call) cancels an in-progress ramp.
+  target:
+    entity:
+      integration: smart_cover
+  fields:
+    position:
+      name: Target position
+      description: Final position to reach by end_time (0 = closed, 100 = open), a FINAL/calibrated value.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    start_position:
+      name: Start position
+      description: Position the cover jumps to immediately before ramping. Defaults to the cover's current position.
+      required: false
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    end_time:
+      name: End time
+      description: Timestamp the ramp should reach the target position by.
+      required: true
+      selector:
+        datetime:
+    steps:
+      name: Number of steps
+      description: How many intermediate position updates during the ramp. Reduced when needed so that every move is at least 5%.
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 120
+          mode: box

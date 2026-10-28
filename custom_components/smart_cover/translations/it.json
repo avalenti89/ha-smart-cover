@@ -1,0 +1,232 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nuova Smart Cover",
+        "data": {
+          "name": "Nome",
+          "target_cover": "Cover fisica da wrappare"
+        },
+        "data_description": {
+          "name": "Nome visualizzato per questa smart cover (es. \"Finestra principale\"). Determina anche l'entity_id proposto.",
+          "target_cover": "L'entità cover fisica già esistente che questo componente deve controllare e monitorare — i comandi apri/chiudi/posiziona vengono inoltrati a questa entità."
+        },
+        "sections": {
+          "window": {
+            "name": "Sensori finestra",
+            "description": "Quali sensori dicono a questa tapparella se la finestra della stanza è chiusa, a vasistas o aperta a battente. È quella posizione a decidere quale limite anti-pioggia si applica.",
+            "data": {
+              "window_sensor": "Sensore apertura finestra (opzionale)",
+              "tilt_sensor": "Sensore rotazione/tilt finestra (opzionale)",
+              "tilt_closed_value": "Inclinazione a finestra verticale (gradi)",
+              "tilt_tolerance": "Tolleranza inclinazione verticale (± gradi)",
+              "window_debounce": "Tempo antirimbalzo (secondi)"
+            },
+            "data_description": {
+              "window_sensor": "Binary_sensor apertura/chiusura della finestra della stessa stanza. Determina quale dei limiti anti-pioggia si applica alla tapparella. Se lasciato vuoto, si applica sempre il limite più restrittivo (finestra aperta a battente). Attuale: {current_window_sensor}",
+              "tilt_sensor": "Sensore numerico di rotazione/inclinazione (in gradi) della stessa finestra, per riconoscere l'apertura a vasistas, che ha un limite anti-pioggia proprio, meno restrittivo di quello a battente. Usa le due impostazioni di inclinazione sotto. Senza questo sensore la vasistas non è rilevabile e vale il limite a battente. Attuale: {current_tilt_sensor}",
+              "tilt_closed_value": "Quanto legge il sensore di rotazione con l'anta verticale: finestra chiusa o aperta a battente. Ignorato se non è impostato il sensore di rotazione. Attuale: {current_tilt_closed_value}",
+              "tilt_tolerance": "Di quanto una lettura può scostarsi dal valore verticale ed essere ancora considerata verticale. Ogni lettura sopra verticale + tolleranza è vasistas; tutto il resto conta come battente (il limite anti-pioggia più restrittivo). Attuale: {current_tilt_tolerance}",
+              "window_debounce": "Per quanto tempo una nuova posizione della finestra deve reggere prima che il sensore posizione finestra la adotti. I passaggi più brevi vengono trattati come parte di una manovra e non lasciano traccia: è questo che permette di riconoscere \"vasistas -> aperta\" nonostante i pochi secondi di chiusura che quella manovra richiede fisicamente, ed è sempre questo ad assorbire i rimbalzi del sensore reed. NON ritarda la protezione pioggia, che reagisce sempre alla posizione istantanea. 0 disattiva l'antirimbalzo. Attuale: {current_window_debounce}"
+            }
+          },
+          "rain": {
+            "name": "Protezione pioggia",
+            "description": "Da dove viene letta la condizione meteo e quanto può restare aperta la tapparella mentre piove — un limite per ogni posizione della finestra.",
+            "data": {
+              "weather_entity": "Entità meteo (weather.*, opzionale — se impostata ha priorità sulla condizione manuale)",
+              "manual_weather_condition": "Condizione meteo manuale (o \"sensor\" per leggere l'entità meteo sopra)",
+              "rain_position_limit": "Apertura massima con pioggia — finestra aperta a battente (%)",
+              "vasistas_position_limit": "Apertura massima con pioggia — finestra a vasistas (%)"
+            },
+            "data_description": {
+              "weather_entity": "Entità weather.* (es. weather.home) da cui leggere direttamente la condizione meteo attuale. Se impostata, ha PRIORITÀ sulla condizione manuale sottostante. Attuale: {current_weather_entity}",
+              "manual_weather_condition": "Scegli a mano una condizione meteo fissa, OPPURE scegli \"sensor\" per leggere invece weather_entity sopra (disponibile solo se weather_entity è impostata). Una condizione fissa cambia solo quando la modifichi qui da \"Configura\". Attuale: {current_manual_weather_condition}",
+              "rain_position_limit": "Apertura massima consentita alla tapparella quando piove e la finestra è aperta a battente (o non se ne può determinare la posizione): l'acqua entra, quindi la tapparella va tenuta quasi del tutto chiusa. Valore FINALE/calibrato. Con la finestra chiusa non si applica nessun limite. Attuale: {current_rain_position_limit}",
+              "vasistas_position_limit": "Apertura massima consentita alla tapparella quando piove e la finestra è a vasistas: la parte aperta sta in alto, quindi la tapparella può stare più alzata rispetto alla finestra a battente. Valore FINALE/calibrato. Compare solo se è configurato il sensore di rotazione, altrimenti la vasistas non è rilevabile. Attuale: {current_vasistas_position_limit}"
+            }
+          },
+          "positions": {
+            "name": "Posizioni e preset",
+            "description": "Calibrazione della posizione di chiusura e pulsanti di posizione rapida mostrati sulla card.",
+            "data": {
+              "closed_position_offset": "Offset posizione chiusa — corsa extra di sigillatura (%)",
+              "presets": "Percentuali preset (separate da virgola)",
+              "auto_recalibrate_on_restart": "Auto-ricalibrazione dopo un riavvio",
+              "restart_recalibration_min_delta": "Soglia ricalibrazione post-riavvio (%)"
+            },
+            "data_description": {
+              "closed_position_offset": "Quanto della scala grezza 0-100 della tapparella fisica è \"corsa extra che sigilla le lamelle\" sotto il punto in cui la tapparella è già completamente abbassata (es. 10 significa che grezzo 0-10 è quella corsa di sigillatura, grezzo 10 è la tapparella appoggiata a terra). I comandi normali di questa entità (apri/chiudi/imposta posizione, qualsiasi preset/automazione che la usa, e anche i limiti anti-pioggia) sono valori FINALI riferiti alla sola corsa reale della tapparella: 0% è tutta giù, 100% tutta su, 50% esattamente a metà — il valore grezzo inviato al motore viene riscalato sull'intervallo sopra la corsa di sigillatura. Usa il servizio close_completely per il vero grezzo 0% (sigillata) a prescindere dall'offset. Gli estremi di corsa della ricalibrazione restano invece sui valori grezzi. Attuale: {current_closed_position_offset}",
+              "presets": "Pulsanti di posizione rapida mostrati sulla card Lovelace, es. \"0, 25, 50, 75, 100\" (una card può comunque sovrascriverli con la propria configurazione presets:). Attuale: {current_presets}",
+              "auto_recalibrate_on_restart": "Dopo un riavvio di Home Assistant (es. uno sbalzo di corrente), esegue un ciclo di ricalibrazione completo alla prima richiesta di un'automazione che sposta la tapparella di molto — utile se il motore si è disallineato mentre HA era spento. Si attiva solo tramite il servizio request_position (quello usato dalle automazioni); i comandi manuali di apertura/chiusura/posizione non lo attivano mai. Rispetta anche il toggle \"ricalibrazione abilitata\" a runtime. Attuale: {current_auto_recalibrate_on_restart}",
+              "restart_recalibration_min_delta": "Di quanti punti percentuali deve discostarsi la richiesta di un'automazione (request_position) dalla posizione attuale della tapparella perché auto_recalibrate_on_restart agganci a quella richiesta il proprio ciclo di ricalibrazione. Uno spostamento più piccolo dopo il riavvio viene onorato direttamente, senza ricalibrazione. Ignorato una volta che la ricalibrazione post-riavvio è già scattata in questa sessione. Attuale: {current_restart_recalibration_min_delta}"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "sensor_requires_weather_entity": "\"sensor\" richiede di impostare un'entità meteo, in \"Protezione pioggia\".",
+      "invalid_presets": "In \"Posizioni e preset\", inserisci un elenco di percentuali intere tra 0 e 100 separate da virgola, es. \"0, 25, 50, 75, 100\"."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Modifica sensori e soglie",
+        "data": {
+          "name": "Nome",
+          "target_cover": "Cover fisica da wrappare"
+        },
+        "data_description": {
+          "name": "Nome visualizzato per questa smart cover. Rinominarlo qui non cambia l'entity_id già assegnato.",
+          "target_cover": "L'entità cover fisica già esistente che questo componente deve controllare e monitorare."
+        },
+        "sections": {
+          "window": {
+            "name": "Sensori finestra",
+            "description": "Quali sensori dicono a questa tapparella se la finestra della stanza è chiusa, a vasistas o aperta a battente. È quella posizione a decidere quale limite anti-pioggia si applica.",
+            "data": {
+              "window_sensor": "Sensore apertura finestra (opzionale)",
+              "tilt_sensor": "Sensore rotazione/tilt finestra (opzionale)",
+              "tilt_closed_value": "Inclinazione a finestra verticale (gradi)",
+              "tilt_tolerance": "Tolleranza inclinazione verticale (± gradi)",
+              "window_debounce": "Tempo antirimbalzo (secondi)"
+            },
+            "data_description": {
+              "window_sensor": "Binary_sensor apertura/chiusura della finestra della stessa stanza. Determina quale dei limiti anti-pioggia si applica. Se lasciato vuoto vale sempre il più restrittivo. Attuale: {current_window_sensor}",
+              "tilt_sensor": "Sensore numerico di rotazione/inclinazione della stessa finestra, per riconoscere l'apertura a vasistas, che ha un limite anti-pioggia proprio. Attuale: {current_tilt_sensor}",
+              "tilt_closed_value": "Quanto legge il sensore di rotazione con l'anta verticale (chiusa o a battente). Attuale: {current_tilt_closed_value}",
+              "tilt_tolerance": "Scostamento ammesso dal valore verticale; sopra verticale + tolleranza è vasistas. Attuale: {current_tilt_tolerance}",
+              "window_debounce": "Per quanto tempo una nuova posizione della finestra deve reggere prima che il sensore posizione finestra la adotti. I passaggi più brevi vengono trattati come parte di una manovra e non lasciano traccia: è questo che permette di riconoscere \"vasistas -> aperta\" nonostante i pochi secondi di chiusura che quella manovra richiede fisicamente, ed è sempre questo ad assorbire i rimbalzi del sensore reed. NON ritarda la protezione pioggia, che reagisce sempre alla posizione istantanea. 0 disattiva l'antirimbalzo. Attuale: {current_window_debounce}"
+            }
+          },
+          "rain": {
+            "name": "Protezione pioggia",
+            "description": "Da dove viene letta la condizione meteo e quanto può restare aperta la tapparella mentre piove — un limite per ogni posizione della finestra.",
+            "data": {
+              "weather_entity": "Entità meteo (weather.*, opzionale — se impostata ha priorità sulla condizione manuale)",
+              "manual_weather_condition": "Condizione meteo manuale (o \"sensor\" per leggere l'entità meteo sopra)",
+              "rain_position_limit": "Apertura massima con pioggia — finestra aperta a battente (%)",
+              "vasistas_position_limit": "Apertura massima con pioggia — finestra a vasistas (%)"
+            },
+            "data_description": {
+              "weather_entity": "Entità weather.* da cui leggere direttamente la condizione meteo attuale. Ha priorità sulla condizione manuale. Attuale: {current_weather_entity}",
+              "manual_weather_condition": "Scegli a mano una condizione meteo fissa, OPPURE scegli \"sensor\" per leggere invece weather_entity sopra (disponibile solo se weather_entity è impostata). Una condizione fissa cambia solo quando la modifichi qui da \"Configura\". Attuale: {current_manual_weather_condition}",
+              "rain_position_limit": "Apertura massima consentita quando piove e la finestra è aperta a battente (o di posizione ignota). Valore FINALE/calibrato. Attuale: {current_rain_position_limit}",
+              "vasistas_position_limit": "Apertura massima consentita quando piove e la finestra è a vasistas: l'apertura sta in alto, quindi la tapparella può stare più su. Valore FINALE/calibrato. Attuale: {current_vasistas_position_limit}"
+            }
+          },
+          "positions": {
+            "name": "Posizioni e preset",
+            "description": "Calibrazione della posizione di chiusura e pulsanti di posizione rapida mostrati sulla card.",
+            "data": {
+              "closed_position_offset": "Offset posizione chiusa — corsa extra di sigillatura (%)",
+              "presets": "Percentuali preset (separate da virgola)",
+              "auto_recalibrate_on_restart": "Auto-ricalibrazione dopo un riavvio",
+              "restart_recalibration_min_delta": "Soglia ricalibrazione post-riavvio (%)"
+            },
+            "data_description": {
+              "closed_position_offset": "Quanto della scala grezza 0-100 della tapparella fisica è \"corsa extra che sigilla le lamelle\" sotto il punto in cui la tapparella è già completamente abbassata (es. 10 significa che grezzo 0-10 è quella corsa di sigillatura, grezzo 10 è la tapparella appoggiata a terra). I comandi normali di questa entità (apri/chiudi/imposta posizione, qualsiasi preset/automazione che la usa, e anche i limiti anti-pioggia) sono valori FINALI riferiti alla sola corsa reale della tapparella: 0% è tutta giù, 100% tutta su, 50% esattamente a metà — il valore grezzo inviato al motore viene riscalato sull'intervallo sopra la corsa di sigillatura. Usa il servizio close_completely per il vero grezzo 0% (sigillata) a prescindere dall'offset. Gli estremi di corsa della ricalibrazione restano invece sui valori grezzi. Attuale: {current_closed_position_offset}",
+              "presets": "Pulsanti di posizione rapida mostrati sulla card Lovelace, es. \"0, 25, 50, 75, 100\" (una card può comunque sovrascriverli con la propria configurazione presets:). Attuale: {current_presets}",
+              "auto_recalibrate_on_restart": "Dopo un riavvio di Home Assistant (es. uno sbalzo di corrente), esegue un ciclo di ricalibrazione completo alla prima richiesta di un'automazione che sposta la tapparella di molto — utile se il motore si è disallineato mentre HA era spento. Si attiva solo tramite il servizio request_position (quello usato dalle automazioni); i comandi manuali di apertura/chiusura/posizione non lo attivano mai. Rispetta anche il toggle \"ricalibrazione abilitata\" a runtime. Attuale: {current_auto_recalibrate_on_restart}",
+              "restart_recalibration_min_delta": "Di quanti punti percentuali deve discostarsi la richiesta di un'automazione (request_position) dalla posizione attuale della tapparella perché auto_recalibrate_on_restart agganci a quella richiesta il proprio ciclo di ricalibrazione. Uno spostamento più piccolo dopo il riavvio viene onorato direttamente, senza ricalibrazione. Ignorato una volta che la ricalibrazione post-riavvio è già scattata in questa sessione. Attuale: {current_restart_recalibration_min_delta}"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "sensor_requires_weather_entity": "\"sensor\" richiede di impostare un'entità meteo, in \"Protezione pioggia\".",
+      "invalid_presets": "In \"Posizioni e preset\", inserisci un elenco di percentuali intere tra 0 e 100 separate da virgola, es. \"0, 25, 50, 75, 100\"."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "window_position": {
+        "name": "Posizione finestra",
+        "state": {
+          "closed": "Chiusa",
+          "tilted": "Vasistas",
+          "open": "Aperta"
+        }
+      }
+    }
+  },
+  "issues": {
+    "window_sensor_unavailable": {
+      "title": "Smart Cover: sensore finestra non disponibile ({name})",
+      "description": "Il sensore o i sensori finestra configurati per {name} risultano non disponibili da un po': {entities}.\n\nFinché mancano, la posizione della finestra risulta sconosciuta e la protezione pioggia applica il limite più restrittivo, quindi la tapparella può restare più bassa del solito. I servizi di ricalibrazione e posizionamento continuano a funzionare.\n\nControlla il dispositivo (batteria, connessione) oppure rimuovi il sensore dalle opzioni di questa tapparella se non esiste più. Questo messaggio sparisce da solo appena il sensore torna a rispondere."
+    }
+  },
+  "services": {
+    "recalibrate_manual": {
+      "name": "Ricalibra manualmente",
+      "description": "Esegue subito il ciclo di ricalibrazione, ignorando toggle e limite pioggia."
+    },
+    "request_recalibration": {
+      "name": "Richiedi ricalibrazione",
+      "description": "Punto di ingresso per automazioni: chiede una ricalibrazione, decide l'entità se eseguirla."
+    },
+    "request_position": {
+      "name": "Richiedi posizione",
+      "description": "Punto di ingresso per automazioni: chiede alla tapparella di raggiungere una posizione, decide l'entità quanto onorarla in base al limite anti-pioggia in vigore. Una nuova richiesta sostituisce sempre quella ancora in sospeso.",
+      "fields": {
+        "position": {
+          "name": "Posizione",
+          "description": "Posizione richiesta (0 = chiusa, 100 = aperta)."
+        }
+      }
+    },
+    "set_recalibration_enabled": {
+      "name": "Abilita/disabilita ricalibrazione",
+      "description": "Attiva o disattiva la ricalibrazione automatica.",
+      "fields": {
+        "enabled": {
+          "name": "Abilitata",
+          "description": "true per abilitare, false per disabilitare."
+        }
+      }
+    },
+    "set_rain_control_enabled": {
+      "name": "Abilita/disabilita controllo pioggia",
+      "description": "Attiva o disattiva il limite automatico di posizione legato alla pioggia.",
+      "fields": {
+        "enabled": {
+          "name": "Abilitato",
+          "description": "true per abilitare, false per disabilitare."
+        }
+      }
+    },
+    "activate_rain_protection": {
+      "name": "Attiva protezione pioggia ora",
+      "description": "Applica subito il limite di posizione anti-pioggia, indipendentemente dallo stato reale del sensore."
+    },
+    "close_completely": {
+      "name": "Chiudi completamente",
+      "description": "Va sempre al vero grezzo 0% della tapparella — la corsa extra che sigilla le lamelle — ignorando completamente closed_position_offset. A differenza della chiusura normale, che si ferma dove la tapparella sembra chiusa."
+    },
+    "ramp_to_position": {
+      "name": "Rampa verso posizione",
+      "description": "Muove gradualmente la tapparella da start_position (default: posizione attuale) a position, a partire da adesso e distribuita fino a end_time. Il limite anti-pioggia viene applicato ad ogni step. Qualsiasi comando esplicito annulla una rampa in corso.",
+      "fields": {
+        "position": {
+          "name": "Posizione finale",
+          "description": "Posizione da raggiungere entro end_time (0 = chiusa, 100 = aperta)."
+        },
+        "start_position": {
+          "name": "Posizione iniziale",
+          "description": "Posizione a cui la tapparella salta subito prima di iniziare la rampa. Default: posizione attuale."
+        },
+        "end_time": {
+          "name": "Orario finale",
+          "description": "Orario entro cui la rampa deve raggiungere la posizione finale."
+        },
+        "steps": {
+          "name": "Numero di step",
+          "description": "Quanti aggiornamenti di posizione intermedi durante la rampa. Ridotti se serve, in modo che ogni movimento sia di almeno il 5%."
+        }
+      }
+    }
+  }
+}

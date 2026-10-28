@@ -1,0 +1,232 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "New Smart Cover",
+        "data": {
+          "name": "Name",
+          "target_cover": "Physical cover to wrap"
+        },
+        "data_description": {
+          "name": "Display name for this smart cover (e.g. \"Front window\"). Also drives the suggested entity_id.",
+          "target_cover": "The existing physical cover entity this component controls and monitors — open/close/position commands are forwarded to it."
+        },
+        "sections": {
+          "window": {
+            "name": "Window sensors",
+            "description": "Which sensors tell this cover whether the room's window is closed, at vasistas or fully open. That position decides which rain cap applies.",
+            "data": {
+              "window_sensor": "Window open/close sensor (optional)",
+              "tilt_sensor": "Window rotation/tilt sensor (optional)",
+              "tilt_closed_value": "Tilt with the sash vertical (degrees)",
+              "tilt_tolerance": "Vertical tilt tolerance (± degrees)",
+              "window_debounce": "Anti-bounce time (seconds)"
+            },
+            "data_description": {
+              "window_sensor": "Binary_sensor for the open/close state of the room's window. Decides which of the rain caps applies to the cover. If left empty, the strictest cap (fully open window) always applies. Currently: {current_window_sensor}",
+              "tilt_sensor": "Numeric rotation/tilt sensor (in degrees) for the same window, to recognize a tilted/vasistas opening, which gets its own, looser rain cap than a fully open window. Also uses the two tilt settings below. Without this sensor vasistas can't be detected and the fully-open cap applies. Currently: {current_tilt_sensor}",
+              "tilt_closed_value": "What the rotation sensor reads with the sash vertical: window shut, or fully open as a casement. Ignored if no tilt sensor is set. Currently: {current_tilt_closed_value}",
+              "tilt_tolerance": "How far a reading may stray from the vertical value and still count as vertical. Any reading above vertical + tolerance is vasistas; anything else counts as fully open (the stricter rain cap). Currently: {current_tilt_tolerance}",
+              "window_debounce": "How long a new window position must hold before the window position sensor adopts it. Shorter excursions are treated as part of a manoeuvre and leave no trace — which is what lets \"vasistas -> open\" be recognized despite the few seconds of closure it physically requires, and what absorbs a bouncing reed contact. Does NOT delay rain protection, which always reacts to the instantaneous position. 0 disables the debounce. Currently: {current_window_debounce}"
+            }
+          },
+          "rain": {
+            "name": "Rain protection",
+            "description": "Where the weather condition is read from, and how far the cover may stay open while it rains — one cap per window position.",
+            "data": {
+              "weather_entity": "Weather entity (weather.*, optional — takes priority over the manual condition if set)",
+              "manual_weather_condition": "Manual weather condition (or \"sensor\" to read the weather entity above instead)",
+              "rain_position_limit": "Max opening while raining — window fully open (%)",
+              "vasistas_position_limit": "Max opening while raining — window vasistas (%)"
+            },
+            "data_description": {
+              "weather_entity": "A weather.* entity (e.g. weather.home) to read the current weather condition from directly. If set, it takes PRIORITY over the manual condition below — lets you pick a different weather source per cover. Currently: {current_weather_entity}",
+              "manual_weather_condition": "Pick a fixed weather condition by hand, OR pick \"sensor\" to read weather_entity above instead (only offered once weather_entity is set). A fixed condition only changes when you edit it here via \"Configure\". Currently: {current_manual_weather_condition}",
+              "rain_position_limit": "Maximum opening the cover is allowed while it's raining and the window is fully open (casement), or its position can't be determined: water gets in, so the cover is kept almost shut. A FINAL/calibrated value. With the window closed no cap applies at all. Currently: {current_rain_position_limit}",
+              "vasistas_position_limit": "Maximum opening the cover is allowed while it's raining and the window is at vasistas (top-hung): the gap is up high, so the cover may sit higher than with a fully open window. A FINAL/calibrated value. Only shown when a tilt sensor is configured, otherwise vasistas can't be detected. Currently: {current_vasistas_position_limit}"
+            }
+          },
+          "positions": {
+            "name": "Positions and presets",
+            "description": "Closed-position calibration, and the quick-access buttons shown on the card.",
+            "data": {
+              "closed_position_offset": "Closed-position offset — extra sealing travel (%)",
+              "presets": "Preset percentages (comma-separated)",
+              "auto_recalibrate_on_restart": "Auto-recalibrate after a restart",
+              "restart_recalibration_min_delta": "Restart recalibration threshold (%)"
+            },
+            "data_description": {
+              "closed_position_offset": "How much of the physical cover's raw 0-100 scale is \"extra travel that seals the slats\" below what looks closed (e.g. 10 means raw 0-10 is that extra travel, raw 10 is where it looks closed). This entity's own open/close/position commands (and any preset/automation targeting it, plus the rain caps) are FINAL values, automatically shifted by this amount so its own 0% always lines up with \"looks closed\", not the true physical end of travel. Use the close_completely service to reach the true raw 0% (sealed) regardless of this offset. Recalibration's own travel extremes stay in the physical cover's raw terms. Currently: {current_closed_position_offset}",
+              "presets": "Quick-access position buttons shown on the Lovelace card, e.g. \"0, 25, 50, 75, 100\" (a card can still override these with its own presets: config). Currently: {current_presets}",
+              "auto_recalibrate_on_restart": "After Home Assistant restarts (e.g. a power outage), run a full recalibration cycle the first time an automation asks this cover for a wide move — catches a motor that may have drifted out of sync while HA was down. Only the automation-facing request_position service can trigger this; manual open/close/position commands never do. Also respects the \"recalibration enabled\" runtime toggle. Currently: {current_auto_recalibrate_on_restart}",
+              "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "sensor_requires_weather_entity": "\"sensor\" requires a weather entity to be set, under \"Rain protection\".",
+      "invalid_presets": "Under \"Positions and presets\", enter a comma-separated list of whole percentages between 0 and 100, e.g. \"0, 25, 50, 75, 100\"."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit sensors and thresholds",
+        "data": {
+          "name": "Name",
+          "target_cover": "Physical cover to wrap"
+        },
+        "data_description": {
+          "name": "Display name for this smart cover (e.g. \"Front window\"). Renaming here does not change the already-assigned entity_id.",
+          "target_cover": "The existing physical cover entity this component controls and monitors — open/close/position commands are forwarded to it."
+        },
+        "sections": {
+          "window": {
+            "name": "Window sensors",
+            "description": "Which sensors tell this cover whether the room's window is closed, at vasistas or fully open. That position decides which rain cap applies.",
+            "data": {
+              "window_sensor": "Window open/close sensor (optional)",
+              "tilt_sensor": "Window rotation/tilt sensor (optional)",
+              "tilt_closed_value": "Tilt with the sash vertical (degrees)",
+              "tilt_tolerance": "Vertical tilt tolerance (± degrees)",
+              "window_debounce": "Anti-bounce time (seconds)"
+            },
+            "data_description": {
+              "window_sensor": "Binary_sensor for the open/close state of the room's window. Decides which of the rain caps applies to the cover. If left empty, the strictest cap (fully open window) always applies. Currently: {current_window_sensor}",
+              "tilt_sensor": "Numeric rotation/tilt sensor (in degrees) for the same window, to recognize a tilted/vasistas opening, which gets its own, looser rain cap than a fully open window. Also uses the two tilt settings below. Without this sensor vasistas can't be detected and the fully-open cap applies. Currently: {current_tilt_sensor}",
+              "tilt_closed_value": "What the rotation sensor reads with the sash vertical: window shut, or fully open as a casement. Ignored if no tilt sensor is set. Currently: {current_tilt_closed_value}",
+              "tilt_tolerance": "How far a reading may stray from the vertical value and still count as vertical. Any reading above vertical + tolerance is vasistas; anything else counts as fully open (the stricter rain cap). Currently: {current_tilt_tolerance}",
+              "window_debounce": "How long a new window position must hold before the window position sensor adopts it. Shorter excursions are treated as part of a manoeuvre and leave no trace — which is what lets \"vasistas -> open\" be recognized despite the few seconds of closure it physically requires, and what absorbs a bouncing reed contact. Does NOT delay rain protection, which always reacts to the instantaneous position. 0 disables the debounce. Currently: {current_window_debounce}"
+            }
+          },
+          "rain": {
+            "name": "Rain protection",
+            "description": "Where the weather condition is read from, and how far the cover may stay open while it rains — one cap per window position.",
+            "data": {
+              "weather_entity": "Weather entity (weather.*, optional — takes priority over the manual condition if set)",
+              "manual_weather_condition": "Manual weather condition (or \"sensor\" to read the weather entity above instead)",
+              "rain_position_limit": "Max opening while raining — window fully open (%)",
+              "vasistas_position_limit": "Max opening while raining — window vasistas (%)"
+            },
+            "data_description": {
+              "weather_entity": "A weather.* entity (e.g. weather.home) to read the current weather condition from directly. If set, it takes PRIORITY over the manual condition below — lets you pick a different weather source per cover. Currently: {current_weather_entity}",
+              "manual_weather_condition": "Pick a fixed weather condition by hand, OR pick \"sensor\" to read weather_entity above instead (only offered once weather_entity is set). A fixed condition only changes when you edit it here via \"Configure\". Currently: {current_manual_weather_condition}",
+              "rain_position_limit": "Maximum opening the cover is allowed while it's raining and the window is fully open (casement), or its position can't be determined: water gets in, so the cover is kept almost shut. A FINAL/calibrated value. With the window closed no cap applies at all. Currently: {current_rain_position_limit}",
+              "vasistas_position_limit": "Maximum opening the cover is allowed while it's raining and the window is at vasistas (top-hung): the gap is up high, so the cover may sit higher than with a fully open window. A FINAL/calibrated value. Only shown when a tilt sensor is configured, otherwise vasistas can't be detected. Currently: {current_vasistas_position_limit}"
+            }
+          },
+          "positions": {
+            "name": "Positions and presets",
+            "description": "Closed-position calibration, and the quick-access buttons shown on the card.",
+            "data": {
+              "closed_position_offset": "Closed-position offset — extra sealing travel (%)",
+              "presets": "Preset percentages (comma-separated)",
+              "auto_recalibrate_on_restart": "Auto-recalibrate after a restart",
+              "restart_recalibration_min_delta": "Restart recalibration threshold (%)"
+            },
+            "data_description": {
+              "closed_position_offset": "How much of the physical cover's raw 0-100 scale is \"extra travel that seals the slats\" below what looks closed (e.g. 10 means raw 0-10 is that extra travel, raw 10 is where it looks closed). This entity's own open/close/position commands (and any preset/automation targeting it, plus the rain caps) are FINAL values, automatically shifted by this amount so its own 0% always lines up with \"looks closed\", not the true physical end of travel. Use the close_completely service to reach the true raw 0% (sealed) regardless of this offset. Recalibration's own travel extremes stay in the physical cover's raw terms. Currently: {current_closed_position_offset}",
+              "presets": "Quick-access position buttons shown on the Lovelace card, e.g. \"0, 25, 50, 75, 100\" (a card can still override these with its own presets: config). Currently: {current_presets}",
+              "auto_recalibrate_on_restart": "After Home Assistant restarts (e.g. a power outage), run a full recalibration cycle the first time an automation asks this cover for a wide move — catches a motor that may have drifted out of sync while HA was down. Only the automation-facing request_position service can trigger this; manual open/close/position commands never do. Also respects the \"recalibration enabled\" runtime toggle. Currently: {current_auto_recalibrate_on_restart}",
+              "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}"
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "sensor_requires_weather_entity": "\"sensor\" requires a weather entity to be set, under \"Rain protection\".",
+      "invalid_presets": "Under \"Positions and presets\", enter a comma-separated list of whole percentages between 0 and 100, e.g. \"0, 25, 50, 75, 100\"."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "window_position": {
+        "name": "Window position",
+        "state": {
+          "closed": "Closed",
+          "tilted": "Vasistas",
+          "open": "Open"
+        }
+      }
+    }
+  },
+  "issues": {
+    "window_sensor_unavailable": {
+      "title": "Smart Cover: window sensor unavailable ({name})",
+      "description": "The window sensor(s) configured for {name} have been unavailable for a while: {entities}.\n\nWhile they are missing, the window position reads as unknown and rain protection falls back to its strictest limit, so the cover may be kept lower than usual. The recalibration and position services keep working.\n\nCheck the device (battery, connection) or remove the sensor from this cover's options if it no longer exists. This message disappears on its own once the sensor reports again."
+    }
+  },
+  "services": {
+    "recalibrate_manual": {
+      "name": "Recalibrate manually",
+      "description": "Immediately runs the recalibration cycle (close/open/restore), ignoring both the \"recalibration enabled\" toggle and the rain limits."
+    },
+    "request_recalibration": {
+      "name": "Request recalibration",
+      "description": "Entry point for automations/routines: asks for a recalibration, but the entity decides whether to actually run it."
+    },
+    "request_position": {
+      "name": "Request position",
+      "description": "Entry point for automations/routines: asks the cover to reach a position, but the entity decides how much of that to honor right now, based on the rain limit in force. A newer request always replaces a still-pending one.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Requested position (0 = closed, 100 = open)."
+        }
+      }
+    },
+    "set_recalibration_enabled": {
+      "name": "Enable/disable recalibration",
+      "description": "Turns automatic recalibration (as requested by automations) on or off.",
+      "fields": {
+        "enabled": {
+          "name": "Enabled",
+          "description": "true to enable, false to disable."
+        }
+      }
+    },
+    "set_rain_control_enabled": {
+      "name": "Enable/disable rain control",
+      "description": "Turns the automatic rain position limits on or off.",
+      "fields": {
+        "enabled": {
+          "name": "Enabled",
+          "description": "true to enable, false to disable."
+        }
+      }
+    },
+    "activate_rain_protection": {
+      "name": "Activate rain protection now",
+      "description": "Immediately applies the rain limit the window position calls for, regardless of the actual rain sensor/weather state."
+    },
+    "close_completely": {
+      "name": "Close completely",
+      "description": "Always targets the cover's true raw 0% — the extra travel that seals the slats — ignoring closed_position_offset entirely. Unlike the regular close, which stops where the cover looks closed."
+    },
+    "ramp_to_position": {
+      "name": "Ramp to position",
+      "description": "Gradually moves the cover from start_position (default: current position) to position, starting now and spread out until end_time. Every step is capped to the limit the window position calls for. Any explicit command cancels an in-progress ramp.",
+      "fields": {
+        "position": {
+          "name": "Target position",
+          "description": "Final position to reach by end_time (0 = closed, 100 = open)."
+        },
+        "start_position": {
+          "name": "Start position",
+          "description": "Position the cover jumps to immediately before ramping. Defaults to the cover's current position."
+        },
+        "end_time": {
+          "name": "End time",
+          "description": "Timestamp the ramp should reach the target position by."
+        },
+        "steps": {
+          "name": "Number of steps",
+          "description": "How many intermediate position updates during the ramp. Reduced when needed so that every move is at least 5%."
+        }
+      }
+    }
+  }
+}

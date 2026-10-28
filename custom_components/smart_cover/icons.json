@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "sections": {
+          "window": "mdi:window-open-variant",
+          "rain": "mdi:weather-pouring",
+          "positions": "mdi:tune-vertical"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "sections": {
+          "window": "mdi:window-open-variant",
+          "rain": "mdi:weather-pouring",
+          "positions": "mdi:tune-vertical"
+        }
+      }
+    }
+  }
+}

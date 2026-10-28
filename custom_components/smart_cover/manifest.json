@@ -3,6 +3,7 @@
   "name": "Smart Cover",
   "version": "0.5.0",
   "config_flow": true,
+  "dependencies": ["http"],
   "documentation": "https://github.com/avalenti89/ha-smart-cover",
   "issue_tracker": "https://github.com/avalenti89/ha-smart-cover/issues",
   "codeowners": ["@avalenti89"],

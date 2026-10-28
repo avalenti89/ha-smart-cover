@@ -20,6 +20,7 @@ CONF_PRESETS = "presets"
 CONF_WINDOW_DEBOUNCE = "window_debounce"
 CONF_AUTO_RECALIBRATE_ON_RESTART = "auto_recalibrate_on_restart"
 CONF_RESTART_RECALIBRATION_MIN_DELTA = "restart_recalibration_min_delta"
+CONF_RECALIBRATION_STEP_SECONDS = "recalibration_step_seconds"
 
 # What the rotation sensor reads with the sash vertical — shut, or open
 # as a casement — and how far a reading may stray from it and still
@@ -39,13 +40,13 @@ DEFAULT_MANUAL_WEATHER_CONDITION = "sunny"
 #              one.
 #   open    -> casement/fully open: the sash reads open and the rotation
 #              is not above that band. A reading BELOW the band is not a
-#              position these windows can be in; it stays "open" because
+#              position a tilt-and-turn window can be in; it stays "open" because
 #              that is the stricter rain cap.
 #   unknown -> no window sensor configured, or it has not reported.
 #
 # The open/close sensor is authoritative for open vs closed and is read
 # FIRST: rotation above the threshold while the sash reads closed is not
-# a physical state these windows can be in, so it is not treated as one.
+# a physical state a tilt-and-turn window can be in, so it is not treated as one.
 # ----------------------------------------------------------------------
 WINDOW_CLOSED = "closed"
 WINDOW_TILTED = "tilted"
@@ -63,7 +64,7 @@ WINDOW_POSITION_OPTIONS = [WINDOW_CLOSED, WINDOW_TILTED, WINDOW_OPEN]
 # only adopts a new position once it has held for this many seconds.
 # Anything shorter never becomes stable at all and leaves no trace in
 # the previous-position history — which is the whole point: going from
-# vasistas to fully open on these windows requires passing through
+# vasistas to fully open on a tilt-and-turn window requires passing through
 # "closed" for a few seconds, and that pass-through must not read as a
 # real closure. Same mechanism absorbs a reed contact bouncing while a
 # window that is already open gets handled.
@@ -159,8 +160,11 @@ ATTR_START_POSITION = "start_position"
 ATTR_END_TIME = "end_time"
 ATTR_STEPS = "steps"
 
-# Duration of each close/open/restore step during recalibration
-RECALIBRATION_DELAY_SECONDS = 30
+# Duration of each close/open/restore step during recalibration: long
+# enough for the cover to travel end to end. Per-cover config option (see
+# CONF_RECALIBRATION_STEP_SECONDS) — this is only the default for a newly
+# created entry.
+DEFAULT_RECALIBRATION_STEP_SECONDS = 30
 
 # ----------------------------------------------------------------------
 # Auto-recalibration after a Home Assistant restart (e.g. a power
@@ -174,7 +178,7 @@ RECALIBRATION_DELAY_SECONDS = 30
 DEFAULT_AUTO_RECALIBRATE_ON_RESTART = True
 # Minimum |delta| between the cover's current position and a
 # request_position ask for that ask to count as "long" enough to
-# piggyback the ~60s recalibration cycle on. Keeps a tiny post-restart
+# piggyback the recalibration cycle on. Keeps a tiny post-restart
 # nudge from turning into a full recalibration. Per-cover config option
 # (see CONF_RESTART_RECALIBRATION_MIN_DELTA) — this is only the default
 # for a newly created entry.

@@ -15,7 +15,7 @@ Two readings are kept side by side, on purpose:
   in the history of previous positions.
 
 That second reading is what makes a transition legible. Going from
-vasistas to fully open on these windows requires shutting the sash for
+vasistas to fully open on a tilt-and-turn window requires shutting the sash for
 a few seconds first, so the raw sequence reads
 "tilted -> closed -> open" and the middle step is indistinguishable
 from someone actually closing the window. Debounced, the same
@@ -205,7 +205,7 @@ class WindowTracker:
         the rotation sensor only distinguishes vasistas from a fully open
         sash: vasistas is any rotation above the vertical reading plus
         its tolerance. A rotation while the sash reads closed is not a
-        state these windows can physically be in, so it is not treated
+        state a tilt-and-turn window can physically be in, so it is not treated
         as one.
         """
         if not self._window_sensor:

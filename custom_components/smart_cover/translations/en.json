@@ -53,13 +53,15 @@
               "closed_position_offset": "Closed-position offset — extra sealing travel (%)",
               "presets": "Preset percentages (comma-separated)",
               "auto_recalibrate_on_restart": "Auto-recalibrate after a restart",
-              "restart_recalibration_min_delta": "Restart recalibration threshold (%)"
+              "restart_recalibration_min_delta": "Restart recalibration threshold (%)",
+              "recalibration_step_seconds": "Recalibration step duration (seconds)"
             },
             "data_description": {
               "closed_position_offset": "How much of the physical cover's raw 0-100 scale is \"extra travel that seals the slats\" below what looks closed (e.g. 10 means raw 0-10 is that extra travel, raw 10 is where it looks closed). This entity's own open/close/position commands (and any preset/automation targeting it, plus the rain caps) are FINAL values, automatically shifted by this amount so its own 0% always lines up with \"looks closed\", not the true physical end of travel. Use the close_completely service to reach the true raw 0% (sealed) regardless of this offset. Recalibration's own travel extremes stay in the physical cover's raw terms. Currently: {current_closed_position_offset}",
               "presets": "Quick-access position buttons shown on the Lovelace card, e.g. \"0, 25, 50, 75, 100\" (a card can still override these with its own presets: config). Currently: {current_presets}",
               "auto_recalibrate_on_restart": "After Home Assistant restarts (e.g. a power outage), run a full recalibration cycle the first time an automation asks this cover for a wide move — catches a motor that may have drifted out of sync while HA was down. Only the automation-facing request_position service can trigger this; manual open/close/position commands never do. Also respects the \"recalibration enabled\" runtime toggle. Currently: {current_auto_recalibrate_on_restart}",
-              "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}"
+              "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}",
+              "recalibration_step_seconds": "How long each stage of a recalibration cycle (close fully, open fully, return to the previous position) is given before the next one starts. Set it a little above the time your cover takes to travel end to end. Currently: {current_recalibration_step_seconds}"
             }
           }
         }
@@ -124,13 +126,15 @@
               "closed_position_offset": "Closed-position offset — extra sealing travel (%)",
               "presets": "Preset percentages (comma-separated)",
               "auto_recalibrate_on_restart": "Auto-recalibrate after a restart",
-              "restart_recalibration_min_delta": "Restart recalibration threshold (%)"
+              "restart_recalibration_min_delta": "Restart recalibration threshold (%)",
+              "recalibration_step_seconds": "Recalibration step duration (seconds)"
             },
             "data_description": {
               "closed_position_offset": "How much of the physical cover's raw 0-100 scale is \"extra travel that seals the slats\" below what looks closed (e.g. 10 means raw 0-10 is that extra travel, raw 10 is where it looks closed). This entity's own open/close/position commands (and any preset/automation targeting it, plus the rain caps) are FINAL values, automatically shifted by this amount so its own 0% always lines up with \"looks closed\", not the true physical end of travel. Use the close_completely service to reach the true raw 0% (sealed) regardless of this offset. Recalibration's own travel extremes stay in the physical cover's raw terms. Currently: {current_closed_position_offset}",
               "presets": "Quick-access position buttons shown on the Lovelace card, e.g. \"0, 25, 50, 75, 100\" (a card can still override these with its own presets: config). Currently: {current_presets}",
               "auto_recalibrate_on_restart": "After Home Assistant restarts (e.g. a power outage), run a full recalibration cycle the first time an automation asks this cover for a wide move — catches a motor that may have drifted out of sync while HA was down. Only the automation-facing request_position service can trigger this; manual open/close/position commands never do. Also respects the \"recalibration enabled\" runtime toggle. Currently: {current_auto_recalibrate_on_restart}",
-              "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}"
+              "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}",
+              "recalibration_step_seconds": "How long each stage of a recalibration cycle (close fully, open fully, return to the previous position) is given before the next one starts. Set it a little above the time your cover takes to travel end to end. Currently: {current_recalibration_step_seconds}"
             }
           }
         }

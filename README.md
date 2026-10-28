@@ -11,8 +11,8 @@ through custom services under the `smart_cover` domain.
 
 A common pattern for outdoor covers/shutters is:
 
-- Never let the cover open more than the local building code allows an
-  awning to when it's raining and the window is open.
+- Keep the cover (nearly) shut while it's raining and the window behind
+  it is open, so the rain doesn't get in.
 - Periodically recalibrate a cover's physical end-stops.
 - Let automations *request* these behaviours without each of them having
   to re-implement the same rain/window safety checks.
@@ -32,7 +32,7 @@ rain/window state.
   exposed the associated window is. Three levels, two of them
   configurable:
   - window fully open (casement) — water gets in, so the cover is kept
-    almost shut (`rain_position_limit`, default 10%);
+    almost shut (`rain_position_limit`, default 15%);
   - window at vasistas (tilted past the configurable vertical reading + tolerance) — the gap
     is up high, so the cover may sit higher (`vasistas_position_limit`,
     default 40%);
@@ -92,11 +92,13 @@ rain/window state.
 
 ## Installation
 
-### HACS (recommended once published)
+### HACS (recommended)
 
-1. HACS → Integrations → ⋮ → Custom repositories → add this repo's URL,
-   category "Integration".
-2. Install "Smart Cover", restart Home Assistant.
+1. HACS → ⋮ → *Custom repositories* → add
+   `https://github.com/avalenti89/ha-smart-cover`, category
+   *Integration*.
+2. Download **Smart Cover** and restart Home Assistant.
+3. Settings → Devices & services → Add integration → "Smart Cover".
 
 ### Manual
 
@@ -119,11 +121,13 @@ instance = one physical cover.
 | Vertical tilt tolerance | no | ± degrees a reading may stray from the vertical value and still count as vertical. Above vertical + tolerance the window is tilted; anything else counts as fully open. Default: 0.2. Entries created before 0.5.0 are migrated to vertical 0 with their old threshold as tolerance, so they classify exactly as before. |
 | Weather entity | no | `weather.*` entity to read for rain detection. Only used when "Manual weather condition" below is set to `sensor`. |
 | Manual weather condition | no | Either a fixed weather condition (sunny, rainy, cloudy, ...) set by hand, or the special value `sensor` to read "Weather entity" above live instead. `sensor` is only offered as a choice once a weather entity is set. A fixed condition only changes when you edit it here via "Configure". Default: `sunny`. |
-| Rain position limit | no | Maximum FINAL/perceived opening (%) allowed while it's raining and the window is fully open, or its position is unknown — see calibration note above. Default: 10. |
+| Rain position limit | no | Maximum FINAL/perceived opening (%) allowed while it's raining and the window is fully open, or its position is unknown — see calibration note above. Default: 15. |
 | Vasistas position limit | no | Maximum FINAL/perceived opening (%) allowed while it's raining and the window is at vasistas. Only offered when a tilt sensor is set. Default: 40. |
 | Closed-position offset | no | Extra sealing travel (%) below where the cover looks closed. Shifts this entity's own 0-100% scale — see Features above. Default: 0. |
 | Preset percentages | no | Comma-separated quick-access position buttons shown on the dashboard card, e.g. `0, 25, 50, 75, 100`. Used unless the card itself sets its own `presets:` (see Dashboard card below). Default: `0, 25, 50, 75, 100`. |
 | Auto-recalibrate after a restart | no | After a genuine HA restart, run a full recalibration cycle on the first "long" automatic move (`request_position`) — see Features above. Default: on. |
+| Restart recalibration threshold | no | How far (%) that first automatic move must be from the current position to trigger the post-restart recalibration. Default: 25. |
+| Recalibration step duration | no | Seconds given to each stage of a recalibration cycle (close fully, open fully, return). Set it a little above your cover's end-to-end travel time. Default: 30. |
 
 All fields can be changed later via the integration's "Configure" button.
 
@@ -133,10 +137,17 @@ Standard movement uses the native `cover` domain (`cover.open_cover`,
 `cover.close_cover`, `cover.set_cover_position`, `cover.stop_cover`) —
 nothing custom there. The extra behaviour is under the `smart_cover`
 domain; see `services.yaml` / the Developer Tools → Actions picker for
-the full list: `smart_cover.close_completely`,
-`smart_cover.recalibrate_manual`,
-`request_recalibration`, `set_recalibration_enabled`,
-`set_rain_control_enabled`, `activate_rain_protection`.
+the full list:
+
+| Service | What it does |
+|---|---|
+| `smart_cover.request_position` | Automation-facing move: clamped to the rain limit in force, remembered and completed once the limit allows it. |
+| `smart_cover.request_recalibration` | Automation-facing recalibration: skipped when disabled or unsafe. |
+| `smart_cover.recalibrate_manual` | Recalibrate now, ignoring toggles and rain limits. |
+| `smart_cover.ramp_to_position` | Move gradually to a position by a given time, in steps. |
+| `smart_cover.close_completely` | Reach the true physical 0% (sealed), regardless of the closed-position offset. |
+| `smart_cover.activate_rain_protection` | Apply the rain limit for the current window position right now, whatever the weather. |
+| `smart_cover.set_recalibration_enabled` / `set_rain_control_enabled` | Runtime toggles. |
 
 ## Dashboard card
 

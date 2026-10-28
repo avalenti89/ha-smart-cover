@@ -43,6 +43,7 @@ from .const import (
     CONF_MANUAL_WEATHER_CONDITION,
     CONF_PRESETS,
     CONF_RAIN_POSITION_LIMIT,
+    CONF_RECALIBRATION_STEP_SECONDS,
     CONF_RESTART_RECALIBRATION_MIN_DELTA,
     CONF_TARGET_COVER,
     CONF_VASISTAS_POSITION_LIMIT,
@@ -53,13 +54,13 @@ from .const import (
     DEFAULT_PRESETS,
     DEFAULT_RAIN_POSITION_LIMIT,
     DEFAULT_RAMP_STEPS,
+    DEFAULT_RECALIBRATION_STEP_SECONDS,
     DEFAULT_RESTART_RECALIBRATION_MIN_DELTA,
     DEFAULT_VASISTAS_POSITION_LIMIT,
     DOMAIN,
     MANUAL_CONDITION_SENSOR,
     MIN_RAMP_STEP_SIZE,
     RAIN_WEATHER_STATES,
-    RECALIBRATION_DELAY_SECONDS,
 )
 from .window import WindowTracker
 
@@ -132,6 +133,11 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             data.get(
                 CONF_RESTART_RECALIBRATION_MIN_DELTA,
                 DEFAULT_RESTART_RECALIBRATION_MIN_DELTA,
+            )
+        )
+        self._recalibration_step_seconds: int = int(
+            data.get(
+                CONF_RECALIBRATION_STEP_SECONDS, DEFAULT_RECALIBRATION_STEP_SECONDS
             )
         )
 
@@ -252,8 +258,8 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             # LEGACY (do not remove). The settled view under its
             # original names, mirrored from the same WindowTracker that
             # feeds the window sensor entity: this entity's state,
-            # "previous" and "previous_duration". Automations in this
-            # house still trigger on them, and a template reading an
+            # "previous" and "previous_duration". Existing automations
+            # may still trigger on them, and a template reading an
             # attribute that no longer exists fails silently rather than
             # erroring, so removing these breaks triggers with no signal.
             # New consumers should use the sensor entity instead.
@@ -803,9 +809,9 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             else:
                 final_raw_position = self._calibrated_to_raw(restore_position)
             await self._async_set_raw_position(0)
-            await asyncio.sleep(RECALIBRATION_DELAY_SECONDS)
+            await asyncio.sleep(self._recalibration_step_seconds)
             await self._async_set_raw_position(100)
-            await asyncio.sleep(RECALIBRATION_DELAY_SECONDS)
+            await asyncio.sleep(self._recalibration_step_seconds)
             limit = None if ignore_rain_limit else self._active_position_limit
             if (
                 limit is not None
@@ -813,7 +819,7 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             ):
                 final_raw_position = self._calibrated_to_raw(limit)
             await self._async_set_raw_position(final_raw_position)
-            await asyncio.sleep(RECALIBRATION_DELAY_SECONDS)
+            await asyncio.sleep(self._recalibration_step_seconds)
         finally:
             self._recalibration_in_progress = False
             self.async_write_ha_state()
@@ -928,7 +934,7 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         cover, recalibration not separately disabled at runtime, and
         the move itself "long" enough (see _restart_recalibration_min_delta,
         the per-cover configurable version of the old fixed threshold)
-        that piggybacking the ~60s cycle on it is worth it. An unknown
+        that piggybacking the recalibration cycle on it is worth it. An unknown
         current position always counts as long: there is nothing to
         compare a delta against, and it means this is the very first
         position this session has ever set.

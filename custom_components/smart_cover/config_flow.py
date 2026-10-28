@@ -17,6 +17,7 @@ from .const import (
     CONF_MANUAL_WEATHER_CONDITION,
     CONF_PRESETS,
     CONF_RAIN_POSITION_LIMIT,
+    CONF_RECALIBRATION_STEP_SECONDS,
     CONF_RESTART_RECALIBRATION_MIN_DELTA,
     CONF_TARGET_COVER,
     CONF_TILT_CLOSED_VALUE,
@@ -31,6 +32,7 @@ from .const import (
     DEFAULT_MANUAL_WEATHER_CONDITION,
     DEFAULT_PRESETS,
     DEFAULT_RAIN_POSITION_LIMIT,
+    DEFAULT_RECALIBRATION_STEP_SECONDS,
     DEFAULT_RESTART_RECALIBRATION_MIN_DELTA,
     DEFAULT_TILT_CLOSED_VALUE,
     DEFAULT_TILT_TOLERANCE,
@@ -160,6 +162,11 @@ def _description_placeholders(defaults: dict[str, Any] | None = None) -> dict[st
             defaults.get(
                 CONF_RESTART_RECALIBRATION_MIN_DELTA,
                 DEFAULT_RESTART_RECALIBRATION_MIN_DELTA,
+            )
+        ),
+        "current_recalibration_step_seconds": _hint(
+            defaults.get(
+                CONF_RECALIBRATION_STEP_SECONDS, DEFAULT_RECALIBRATION_STEP_SECONDS
             )
         ),
     }
@@ -306,6 +313,20 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         ): selector.NumberSelector(
             selector.NumberSelectorConfig(
                 min=0, max=100, mode=selector.NumberSelectorMode.SLIDER
+            )
+        ),
+        vol.Optional(
+            CONF_RECALIBRATION_STEP_SECONDS,
+            default=defaults.get(
+                CONF_RECALIBRATION_STEP_SECONDS, DEFAULT_RECALIBRATION_STEP_SECONDS
+            ),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=5,
+                max=300,
+                step=1,
+                unit_of_measurement="s",
+                mode=selector.NumberSelectorMode.BOX,
             )
         ),
     }

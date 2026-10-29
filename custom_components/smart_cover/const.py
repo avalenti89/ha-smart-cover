@@ -160,8 +160,11 @@ ATTR_START_POSITION = "start_position"
 ATTR_END_TIME = "end_time"
 ATTR_STEPS = "steps"
 
-# Duration of each close/open/restore step during recalibration: long
-# enough for the cover to travel end to end. Per-cover config option (see
+# Duration of each close/open/restore step during recalibration. It is a
+# fixed wait, not "until HA reports the position": recalibrating exists
+# because HA's idea of the position may be wrong (it believes 5% while
+# the shutter is really at 90%), so each step must allow a full
+# end-to-end run whatever HA believes. Per-cover config option (see
 # CONF_RECALIBRATION_STEP_SECONDS) — this is only the default for a newly
 # created entry.
 DEFAULT_RECALIBRATION_STEP_SECONDS = 30

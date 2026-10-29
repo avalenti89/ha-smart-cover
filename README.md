@@ -127,7 +127,7 @@ instance = one physical cover.
 | Preset percentages | no | Comma-separated quick-access position buttons shown on the dashboard card, e.g. `0, 25, 50, 75, 100`. Used unless the card itself sets its own `presets:` (see Dashboard card below). Default: `0, 25, 50, 75, 100`. |
 | Auto-recalibrate after a restart | no | After a genuine HA restart, run a full recalibration cycle on the first "long" automatic move (`request_position`) — see Features above. Default: on. |
 | Restart recalibration threshold | no | How far (%) that first automatic move must be from the current position to trigger the post-restart recalibration. Default: 25. |
-| Recalibration step duration | no | Seconds given to each stage of a recalibration cycle (close fully, open fully, return). Set it a little above your cover's end-to-end travel time. Default: 30. |
+| Recalibration step duration | no | Seconds each stage of a recalibration cycle (close fully, open fully, return) waits, whatever position HA believes the cover is at: the point of recalibrating is that this belief may be wrong (HA thinks 5%, the shutter is really at 90%), so each stage must allow a full end-to-end run. Set it a little above your cover's full travel time. Default: 30. |
 
 All fields can be changed later via the integration's "Configure" button.
 

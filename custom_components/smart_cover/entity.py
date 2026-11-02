@@ -196,19 +196,23 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         # _pending_requested_position and both command the cover.
         self._enforce_lock = asyncio.Lock()
 
-        # Last position an automation asked for via request_position,
-        # while it isn't fully honored yet — because the rain limit in
-        # force at the time (or a later environmental change that
-        # re-tightened it) is below it. Chased towards, and cleared
-        # once fully satisfied, by _async_apply_pending_position (see
-        # async_request_position and _async_enforce_rain_limit). Purely
-        # in-memory like _recalibration_in_progress/
-        # _manual_override_active above — NOT persisted via
-        # RestoreEntity: a request lost across a restart isn't
-        # remembered, the automation that made it owns re-asking if it
-        # still wants it. A manual command (open_cover/close_cover/
-        # set_cover_position/close_completely) always clears this —
-        # see the precedence rule in those methods below.
+        # Where the cover should be once nothing is capping it, while it
+        # can't be there yet. Two ways in:
+        #
+        # - an automation's request_position ask above the limit in
+        #   force (see async_request_position);
+        # - the position the cover was at when the environmental clamp
+        #   pulled it down (see _async_enforce_rain_limit_locked): rain
+        #   protection lasts only while it rains, then the cover goes
+        #   back to exactly where it was.
+        #
+        # Chased towards, and cleared once fully satisfied, by
+        # _async_apply_pending_position. Persisted via RestoreEntity (see
+        # async_added_to_hass): a restart in the middle of a shower must
+        # not leave the cover down for the rest of the day. A manual
+        # command (open_cover/close_cover/set_cover_position/
+        # close_completely) always clears this — see the precedence rule
+        # in those methods below.
         self._pending_requested_position: int | None = None
 
     @property
@@ -242,9 +246,11 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             # — one combined window+rain+position verdict instead of making
             # every consumer re-derive it from the fields around it.
             "is_safe": self._is_safe,
-            # An automation's most recent request_position ask that isn't
-            # fully honored yet (still above active_position_limit) — None
-            # when there's nothing outstanding. See async_request_position.
+            # Where the cover goes once the limit lifts: the position it
+            # had before the clamp pulled it down, or an automation's
+            # request_position ask still above active_position_limit —
+            # None when there's nothing outstanding. Also what a restart
+            # restores, see async_added_to_hass.
             "pending_requested_position": self._pending_requested_position,
             "closed_position_offset": self._closed_position_offset,
             "presets": self._presets,
@@ -315,6 +321,9 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
                 self._recalibration_enabled = bool(attrs["recalibration_enabled"])
             if "rain_control_enabled" in attrs:
                 self._rain_control_enabled = bool(attrs["rain_control_enabled"])
+            pending = attrs.get("pending_requested_position")
+            if isinstance(pending, int):
+                self._pending_requested_position = pending
 
         self._sync_from_target()
 
@@ -600,20 +609,19 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         #
         # 1. Clamp DOWN if the current position is no longer safe under
         #    the limit now in force (rain just started, or exposure
-        #    worsened — window went from vasistas to fully open). This
-        #    step never rises the cover on its own just because the
-        #    limit relaxed: relaxing on its own would move it with
-        #    nobody having asked for that.
-        # 2. Chase _pending_requested_position — an automation's most
-        #    recent request_position ask that couldn't be (fully)
-        #    honored earlier because it was above the limit at the
-        #    time. If the limit has since relaxed enough, rise as far
-        #    as it now allows, via _async_apply_pending_position (the
-        #    same helper async_request_position itself uses, so both
-        #    callers agree on how far "as far as allowed" reaches).
-        #    This is the only way the cover ever rises on its own: it
-        #    is honoring something an automation explicitly asked for,
-        #    never inventing a new position.
+        #    worsened — window went from vasistas to fully open), first
+        #    remembering where the cover was as the position to go back
+        #    to. An outstanding request_position ask is newer intent and
+        #    is kept instead; so is a running ramp's, which caps its own
+        #    steps and records its final target if that is capped too.
+        # 2. Chase _pending_requested_position — where the cover was
+        #    before the clamp, or an automation's ask that couldn't be
+        #    (fully) honored. If the limit has since relaxed, rise as
+        #    far as it now allows, via _async_apply_pending_position
+        #    (the same helper async_request_position itself uses, so
+        #    both callers agree on how far "as far as allowed" reaches).
+        #    This is the only way the cover ever rises on its own: back
+        #    to a position it held or was asked for, never a new one.
         #
         # Only ever called for a real environmental change (see
         # _async_source_changed) or once at startup — never because
@@ -625,11 +633,15 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         limit = self._active_position_limit
         position = self._attr_current_cover_position
         if limit is not None and position is not None and position > limit:
+            if self._pending_requested_position is None and not self._ramp_in_progress:
+                self._pending_requested_position = position
             _LOGGER.info(
-                "%s: raining with window %s, limiting to %s%% (final)",
+                "%s: raining with window %s, limiting to %s%% (final), "
+                "back to %s%% once it stops",
                 self.entity_id,
                 self._window_position,
                 limit,
+                self._pending_requested_position,
             )
             await self._async_set_calibrated_position(limit)
         await self._async_apply_pending_position()
@@ -1070,6 +1082,10 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             if generation != self._ramp_generation:
                 return False
             capped = self._rain_capped(target)
+            if final and capped != target:
+                # The ramp ends while still capped: its target becomes the
+                # position to reach once the limit lifts, as for any ask.
+                self._pending_requested_position = target
             if last is not None:
                 min_move = 1 if final else MIN_RAMP_STEP_SIZE
                 if abs(capped - last) < min_move:

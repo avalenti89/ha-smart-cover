@@ -40,8 +40,12 @@ rain/window state.
 
   A window whose position can't be determined (no sensor, sensor
   unavailable, or a vasistas with no tilt sensor to detect it) gets the
-  strictest limit. The clamp only ever closes: when the limit relaxes
-  the cover stays where it is rather than rising to the new limit.
+  strictest limit. The limit never raises a cover: one already more
+  closed than the limit is left where it is. Protection lasts only
+  while it is needed: when the limit relaxes (rain stops, or the window
+  goes from fully open to vasistas), a cover the limit pulled down goes
+  back to exactly where it was, or as far as the new limit allows. A
+  manual command in the meantime, or a newer `request_position`, wins.
 - Manual recalibration (`recalibrate_manual`) and automation-driven
   recalibration (`request_recalibration`) — the latter is skipped
   automatically when disabled or when it's unsafe to move the cover.

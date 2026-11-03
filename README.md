@@ -199,6 +199,12 @@ automation:
 
 ## Dashboard card
 
+The integration adds the card to the dashboard resources by itself and
+keeps its URL tied to the card's content (`?v=<hash>`), so after an
+update a normal page reload shows the new card — no cache clearing.
+With resources managed in YAML, add
+`/smart_cover_frontend/smart-cover-card.js` as a `module` yourself.
+
 ```yaml
 type: custom:smart-cover-card
 entity: cover.my_shutter

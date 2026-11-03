@@ -17,10 +17,12 @@ the "smart" behaviour is reached through custom services, under the
 
 Also registers the custom Lovelace card (frontend/smart-cover-card.js)
 as a static resource, so a dashboard can show the cover plus the extra
-controls in a single widget.
+controls in a single widget, and keeps its dashboard resource pointing
+at the current version of the file.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -160,3 +162,47 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     )
     hass.data.setdefault(DOMAIN, {})["frontend_registered"] = True
     _LOGGER.debug("Smart Cover: frontend card registered at %s", FRONTEND_URL_PATH)
+    # Once Home Assistant is up, so that Lovelace has loaded its resources.
+    async_at_start(hass, _async_sync_lovelace_resource)
+
+
+def _file_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+
+
+async def _async_sync_lovelace_resource(hass: HomeAssistant) -> None:
+    """Keep the card's dashboard resource pointing at the current file.
+
+    Browsers cache the card by its URL, so a resource with a fixed
+    ?v=... keeps serving the old card after an update until the cache is
+    cleared by hand. The URL carries a hash of the file instead, so any
+    change to the card changes the URL. The resource is added if it is
+    missing. Resources in YAML mode are left alone: only the user's YAML
+    can change those.
+    """
+    lovelace = hass.data.get("lovelace")
+    if lovelace is None or getattr(lovelace, "resource_mode", None) != "storage":
+        _LOGGER.debug("Smart Cover: Lovelace resources not in storage mode, skipped")
+        return
+    path = Path(__file__).parent / "frontend" / FRONTEND_JS_FILENAME
+    base = f"{FRONTEND_URL_PATH}/{FRONTEND_JS_FILENAME}"
+    try:
+        url = f"{base}?v={await hass.async_add_executor_job(_file_digest, path)}"
+        resources = lovelace.resources
+        # Loads the collection from storage if nobody has asked for it yet.
+        await resources.async_get_info()
+        for item in resources.async_items():
+            if item.get("url", "").split("?")[0] != base:
+                continue
+            if item["url"] != url:
+                await resources.async_update_item(item["id"], {"url": url})
+                _LOGGER.info("Smart Cover: card resource updated to %s", url)
+            return
+        await resources.async_create_item({"res_type": "module", "url": url})
+        _LOGGER.info("Smart Cover: card resource added as %s", url)
+    except Exception:  # noqa: BLE001 - the card still works, only cached
+        _LOGGER.warning(
+            "Smart Cover: could not update the card's dashboard resource; "
+            "after an update the browser may keep showing the old card",
+            exc_info=True,
+        )

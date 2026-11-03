@@ -81,6 +81,29 @@ set_rain_control_enabled:
       selector:
         boolean:
 
+set_window_position:
+  name: Set window position
+  description: >-
+    Sets the window position by hand, for a window whose sensor is
+    broken or missing. Only accepted when the cover's window position is
+    set to manual in its options; the sensors are then ignored. Takes
+    effect at once, rain limits included.
+  target:
+    entity:
+      integration: smart_cover
+  fields:
+    position:
+      name: Position
+      description: Window position.
+      required: true
+      selector:
+        select:
+          options:
+            - closed
+            - tilted
+            - open
+          translation_key: window_position
+
 activate_rain_protection:
   name: Activate rain protection now
   description: >-

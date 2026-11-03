@@ -24,6 +24,7 @@ from homeassistant.helpers.start import async_at_start
 
 from .const import (
     CONF_TARGET_COVER,
+    CONF_WINDOW_MANUAL,
     CONF_WINDOW_SENSOR,
     DOMAIN,
     WINDOW_POSITION_OPTIONS,
@@ -37,16 +38,16 @@ async def async_setup_entry(
 ) -> None:
     data = {**entry.data, **entry.options}
     tracker: WindowTracker = hass.data[DOMAIN][entry.entry_id]["window"]
-    if not data.get(CONF_WINDOW_SENSOR):
-        # Nothing to report on: without a window sensor the position is
-        # permanently unknown, and an entity stuck on unknown is worse
-        # than no entity at all.
+    if not data.get(CONF_WINDOW_SENSOR) and not data.get(CONF_WINDOW_MANUAL):
+        # Nothing to report on: without a window sensor, and with nobody
+        # setting the position by hand, it is permanently unknown, and an
+        # entity stuck on unknown is worse than no entity at all.
         return
     async_add_entities([SmartCoverWindowSensor(entry, data, tracker)])
 
 
 class SmartCoverWindowSensor(SensorEntity):
-    """The window's settled position: closed, tilted (vasistas) or open."""
+    """The window's settled position: closed, tilted or open."""
 
     _attr_should_poll = False
     _attr_device_class = SensorDeviceClass.ENUM
@@ -93,6 +94,11 @@ class SmartCoverWindowSensor(SensorEntity):
                 None if tracker.raw_since is None else tracker.raw_since.isoformat()
             ),
             "debounce": tracker.debounce,
+            # True when the position is set by hand, not read off sensors.
+            "manual": tracker.manual,
+            # Configured sensors that are unavailable or have gone silent
+            # (see WindowTracker, "Sensor health"); empty when all is well.
+            "offline_sensors": tracker.offline_sensors,
         }
 
     async def async_added_to_hass(self) -> None:

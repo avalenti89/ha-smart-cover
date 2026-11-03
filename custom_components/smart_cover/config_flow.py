@@ -15,29 +15,35 @@ from .const import (
     CONF_AUTO_RECALIBRATE_ON_RESTART,
     CONF_CLOSED_POSITION_OFFSET,
     CONF_MANUAL_WEATHER_CONDITION,
+    CONF_NOTIFY_PERSISTENT,
     CONF_PRESETS,
     CONF_RAIN_POSITION_LIMIT,
     CONF_RECALIBRATION_STEP_SECONDS,
     CONF_RESTART_RECALIBRATION_MIN_DELTA,
+    CONF_SENSOR_SILENCE_HOURS,
     CONF_TARGET_COVER,
     CONF_TILT_CLOSED_VALUE,
     CONF_TILT_SENSOR,
     CONF_TILT_TOLERANCE,
-    CONF_VASISTAS_POSITION_LIMIT,
+    CONF_TILTED_POSITION_LIMIT,
     CONF_WEATHER_ENTITY,
     CONF_WINDOW_DEBOUNCE,
+    CONF_WINDOW_MANUAL,
     CONF_WINDOW_SENSOR,
     DEFAULT_AUTO_RECALIBRATE_ON_RESTART,
     DEFAULT_CLOSED_POSITION_OFFSET,
     DEFAULT_MANUAL_WEATHER_CONDITION,
+    DEFAULT_NOTIFY_PERSISTENT,
     DEFAULT_PRESETS,
     DEFAULT_RAIN_POSITION_LIMIT,
     DEFAULT_RECALIBRATION_STEP_SECONDS,
     DEFAULT_RESTART_RECALIBRATION_MIN_DELTA,
+    DEFAULT_SENSOR_SILENCE_HOURS,
     DEFAULT_TILT_CLOSED_VALUE,
     DEFAULT_TILT_TOLERANCE,
-    DEFAULT_VASISTAS_POSITION_LIMIT,
+    DEFAULT_TILTED_POSITION_LIMIT,
     DEFAULT_WINDOW_DEBOUNCE,
+    DEFAULT_WINDOW_MANUAL,
     DOMAIN,
     MANUAL_CONDITION_SENSOR,
 )
@@ -54,7 +60,8 @@ from .const import (
 SECTION_WINDOW = "window"
 SECTION_RAIN = "rain"
 SECTION_POSITIONS = "positions"
-SECTIONS = (SECTION_WINDOW, SECTION_RAIN, SECTION_POSITIONS)
+SECTION_ALERTS = "alerts"
+SECTIONS = (SECTION_WINDOW, SECTION_RAIN, SECTION_POSITIONS, SECTION_ALERTS)
 
 # Placeholder text for a field that has no value yet, used by
 # _description_placeholders(). Deliberately language-neutral: it is injected
@@ -122,6 +129,9 @@ def _description_placeholders(defaults: dict[str, Any] | None = None) -> dict[st
     """
     defaults = defaults or {}
     return {
+        "current_window_manual": _hint(
+            defaults.get(CONF_WINDOW_MANUAL, DEFAULT_WINDOW_MANUAL)
+        ),
         "current_window_sensor": _hint(defaults.get(CONF_WINDOW_SENSOR)),
         "current_tilt_sensor": _hint(defaults.get(CONF_TILT_SENSOR)),
         "current_tilt_closed_value": _hint(
@@ -142,10 +152,8 @@ def _description_placeholders(defaults: dict[str, Any] | None = None) -> dict[st
         "current_rain_position_limit": _hint(
             defaults.get(CONF_RAIN_POSITION_LIMIT, DEFAULT_RAIN_POSITION_LIMIT)
         ),
-        "current_vasistas_position_limit": _hint(
-            defaults.get(
-                CONF_VASISTAS_POSITION_LIMIT, DEFAULT_VASISTAS_POSITION_LIMIT
-            )
+        "current_tilted_position_limit": _hint(
+            defaults.get(CONF_TILTED_POSITION_LIMIT, DEFAULT_TILTED_POSITION_LIMIT)
         ),
         "current_closed_position_offset": _hint(
             defaults.get(CONF_CLOSED_POSITION_OFFSET, DEFAULT_CLOSED_POSITION_OFFSET)
@@ -168,6 +176,12 @@ def _description_placeholders(defaults: dict[str, Any] | None = None) -> dict[st
             defaults.get(
                 CONF_RECALIBRATION_STEP_SECONDS, DEFAULT_RECALIBRATION_STEP_SECONDS
             )
+        ),
+        "current_sensor_silence_hours": _hint(
+            defaults.get(CONF_SENSOR_SILENCE_HOURS, DEFAULT_SENSOR_SILENCE_HOURS)
+        ),
+        "current_notify_persistent": _hint(
+            defaults.get(CONF_NOTIFY_PERSISTENT, DEFAULT_NOTIFY_PERSISTENT)
         ),
     }
 
@@ -194,6 +208,10 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         condition_default = DEFAULT_MANUAL_WEATHER_CONDITION
 
     window_fields: dict[Any, Any] = {
+        vol.Optional(
+            CONF_WINDOW_MANUAL,
+            default=defaults.get(CONF_WINDOW_MANUAL, DEFAULT_WINDOW_MANUAL),
+        ): selector.BooleanSelector(),
         vol.Optional(
             CONF_WINDOW_SENSOR, default=defaults.get(CONF_WINDOW_SENSOR, "")
         ): selector.EntitySelector(
@@ -264,17 +282,18 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         ),
     }
 
-    # The vasistas cap is only offered when a tilt_sensor is set: with no
-    # rotation reading _window_position can never return "tilted", so the
-    # cap would be unreachable and the field would be a lie. Evaluated
-    # from the current form defaults each time the form is (re)shown,
-    # same approach as condition_options above.
-    if defaults.get(CONF_TILT_SENSOR):
+    # The tilted cap is only offered when "tilted" can actually happen: a
+    # tilt_sensor to detect it, or a window position set by hand. Otherwise
+    # _window_position can never return "tilted", so the cap would be
+    # unreachable and the field would be a lie. Evaluated from the current
+    # form defaults each time the form is (re)shown, same approach as
+    # condition_options above.
+    if defaults.get(CONF_TILT_SENSOR) or defaults.get(CONF_WINDOW_MANUAL):
         rain_fields[
             vol.Optional(
-                CONF_VASISTAS_POSITION_LIMIT,
+                CONF_TILTED_POSITION_LIMIT,
                 default=defaults.get(
-                    CONF_VASISTAS_POSITION_LIMIT, DEFAULT_VASISTAS_POSITION_LIMIT
+                    CONF_TILTED_POSITION_LIMIT, DEFAULT_TILTED_POSITION_LIMIT
                 ),
             )
         ] = selector.NumberSelector(
@@ -331,6 +350,27 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
         ),
     }
 
+    alert_fields: dict[Any, Any] = {
+        vol.Optional(
+            CONF_SENSOR_SILENCE_HOURS,
+            default=defaults.get(
+                CONF_SENSOR_SILENCE_HOURS, DEFAULT_SENSOR_SILENCE_HOURS
+            ),
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0,
+                max=168,
+                step=1,
+                unit_of_measurement="h",
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+        vol.Optional(
+            CONF_NOTIFY_PERSISTENT,
+            default=defaults.get(CONF_NOTIFY_PERSISTENT, DEFAULT_NOTIFY_PERSISTENT),
+        ): selector.BooleanSelector(),
+    }
+
     return vol.Schema(
         {
             vol.Required(CONF_NAME, default=defaults.get(CONF_NAME, "")): str,
@@ -347,6 +387,9 @@ def _schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
             ),
             vol.Required(SECTION_POSITIONS): section(
                 vol.Schema(position_fields), {"collapsed": True}
+            ),
+            vol.Required(SECTION_ALERTS): section(
+                vol.Schema(alert_fields), {"collapsed": True}
             ),
         }
     )
@@ -401,9 +444,10 @@ class SmartCoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow: one instance = one physical cover."""
 
     VERSION = 1
-    # 2: tilt_threshold split into tilt_closed_value + tilt_tolerance
+    # 2: tilt_threshold split into tilt_closed_value + tilt_tolerance;
+    # 3: vasistas_position_limit renamed tilted_position_limit
     # (see async_migrate_entry in __init__.py).
-    MINOR_VERSION = 2
+    MINOR_VERSION = 3
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

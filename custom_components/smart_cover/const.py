@@ -14,26 +14,36 @@ LEGACY_CONF_TILT_THRESHOLD = "tilt_threshold"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_MANUAL_WEATHER_CONDITION = "manual_weather_condition"
 CONF_RAIN_POSITION_LIMIT = "rain_position_limit"
-CONF_VASISTAS_POSITION_LIMIT = "vasistas_position_limit"
+CONF_TILTED_POSITION_LIMIT = "tilted_position_limit"
+# Pre-0.6.0 name of tilted_position_limit. Only read by the config entry
+# migration in __init__.py.
+LEGACY_CONF_VASISTAS_POSITION_LIMIT = "vasistas_position_limit"
+# True = the window position is set by hand (smart_cover.set_window_position,
+# the card's buttons) and the window/tilt sensors are ignored.
+CONF_WINDOW_MANUAL = "window_manual"
 CONF_CLOSED_POSITION_OFFSET = "closed_position_offset"
 CONF_PRESETS = "presets"
 CONF_WINDOW_DEBOUNCE = "window_debounce"
 CONF_AUTO_RECALIBRATE_ON_RESTART = "auto_recalibrate_on_restart"
 CONF_RESTART_RECALIBRATION_MIN_DELTA = "restart_recalibration_min_delta"
 CONF_RECALIBRATION_STEP_SECONDS = "recalibration_step_seconds"
+CONF_SENSOR_SILENCE_HOURS = "sensor_silence_hours"
+CONF_NOTIFY_PERSISTENT = "notify_persistent"
 
 # What the rotation sensor reads with the sash vertical — shut, or open
 # as a casement — and how far a reading may stray from it and still
-# count as vertical. Anything above that band is vasistas.
+# count as vertical. Anything above that band is tilted.
 DEFAULT_TILT_CLOSED_VALUE = 0
 DEFAULT_TILT_TOLERANCE = 0.2
+DEFAULT_WINDOW_MANUAL = False
 DEFAULT_MANUAL_WEATHER_CONDITION = "sunny"
 
 # ----------------------------------------------------------------------
 # Window positions, as classified by WindowTracker (window.py).
 #
 #   closed  -> the sash is shut: the open/close sensor reads closed.
-#   tilted  -> vasistas/top-hung: the sash reads OPEN and the rotation
+#   tilted  -> tilt position of a tilt-and-turn window (Italian:
+#              "ribalta"): the sash reads OPEN and the rotation
 #              sensor is above tilt_closed_value + tilt_tolerance. A
 #              tilted window is open as far as air is concerned; only the
 #              rain caps treat it as a lesser exposure than a fully open
@@ -47,6 +57,9 @@ DEFAULT_MANUAL_WEATHER_CONDITION = "sunny"
 # The open/close sensor is authoritative for open vs closed and is read
 # FIRST: rotation above the threshold while the sash reads closed is not
 # a physical state a tilt-and-turn window can be in, so it is not treated as one.
+#
+# With window_manual on, none of the above is read: the position is
+# whatever was last set by hand, "unknown" until the first time.
 # ----------------------------------------------------------------------
 WINDOW_CLOSED = "closed"
 WINDOW_TILTED = "tilted"
@@ -64,7 +77,7 @@ WINDOW_POSITION_OPTIONS = [WINDOW_CLOSED, WINDOW_TILTED, WINDOW_OPEN]
 # only adopts a new position once it has held for this many seconds.
 # Anything shorter never becomes stable at all and leaves no trace in
 # the previous-position history — which is the whole point: going from
-# vasistas to fully open on a tilt-and-turn window requires passing through
+# tilted to fully open on a tilt-and-turn window requires passing through
 # "closed" for a few seconds, and that pass-through must not read as a
 # real closure. Same mechanism absorbs a reed contact bouncing while a
 # window that is already open gets handled.
@@ -82,18 +95,19 @@ DEFAULT_WINDOW_DEBOUNCE = 10
 #
 #   window fully open (casement) -> water gets in, keep the cover almost
 #       shut: DEFAULT_RAIN_POSITION_LIMIT.
-#   window vasistas (top-hung)   -> the gap is up high, so the cover is
-#       allowed to sit higher: DEFAULT_VASISTAS_POSITION_LIMIT.
+#   window tilted                -> the gap is up high, so the cover is
+#       allowed to sit higher: DEFAULT_TILTED_POSITION_LIMIT.
 #   window closed                -> water never gets in, no cap at all.
 #
 # Both are FINAL/calibrated percentages (see closed_position_offset) and
 # both are per-cover options — these are only the defaults for a newly
-# created entry. The vasistas one is only meaningful when that cover has
-# a tilt_sensor: without a rotation reading vasistas can't be told apart
-# from a fully open window, so the stricter limit applies.
+# created entry. The tilted one is only meaningful when that cover has
+# a tilt_sensor, or its window position is set by hand: otherwise tilted
+# can't be told apart from a fully open window, so the stricter limit
+# applies.
 # ----------------------------------------------------------------------
 DEFAULT_RAIN_POSITION_LIMIT = 15
-DEFAULT_VASISTAS_POSITION_LIMIT = 40
+DEFAULT_TILTED_POSITION_LIMIT = 40
 # 0 = no calibration, i.e. identical to raw target_cover behaviour.
 DEFAULT_CLOSED_POSITION_OFFSET = 0
 # Preset percentages offered as quick-access buttons, both on the
@@ -153,6 +167,8 @@ SERVICE_SET_RECALIBRATION_ENABLED = "set_recalibration_enabled"
 SERVICE_SET_RAIN_CONTROL_ENABLED = "set_rain_control_enabled"
 SERVICE_ACTIVATE_RAIN_PROTECTION = "activate_rain_protection"
 SERVICE_RAMP_TO_POSITION = "ramp_to_position"
+# Sets the window position by hand; only accepted with window_manual on.
+SERVICE_SET_WINDOW_POSITION = "set_window_position"
 
 ATTR_ENABLED = "enabled"
 ATTR_POSITION = "position"
@@ -198,6 +214,30 @@ DEFAULT_RESTART_RECALIBRATION_MIN_DELTA = 25
 # Default number of intermediate position updates for ramp_to_position
 # when the caller doesn't specify one.
 DEFAULT_RAMP_STEPS = 10
+
+# ----------------------------------------------------------------------
+# Window sensor health (see window.py, "Sensor health").
+#
+# A battery sensor that goes flat does not always turn unavailable:
+# BTHome devices are "sleepy", so Home Assistant keeps their last state
+# forever and the window just looks frozen where it was. Silence is what
+# gives them away — a sensor that has not reported for
+# sensor_silence_hours counts as offline (0 = only unavailable counts).
+# How long a healthy sensor stays quiet depends on the device and the
+# season (windows shut all winter change nothing), hence per-cover.
+#
+# An offline sensor is always a repair issue, optionally a persistent
+# notification too, and always an EVENT_NOTIFICATION on the bus. Phones
+# are not this integration's business: routing a notification there
+# (which phones, quiet hours, ...) belongs to an automation listening
+# for the event.
+# ----------------------------------------------------------------------
+DEFAULT_SENSOR_SILENCE_HOURS = 12
+DEFAULT_NOTIFY_PERSISTENT = True
+# Carries title, message and data, Companion-app style (data.tag, plus
+# message "clear_notification" when the problem is over), so that an
+# automation can hand it to notify.mobile_app_* as it is.
+EVENT_NOTIFICATION = f"{DOMAIN}_notification"
 
 # Smallest movement a ramp step is allowed to make, in CALIBRATED
 # percentage points. A ramp whose span is too short for the requested

@@ -32,10 +32,12 @@ from homeassistant.helpers.start import async_at_start
 from .const import (
     CONF_TILT_CLOSED_VALUE,
     CONF_TILT_TOLERANCE,
+    CONF_TILTED_POSITION_LIMIT,
     DOMAIN,
     FRONTEND_JS_FILENAME,
     FRONTEND_URL_PATH,
     LEGACY_CONF_TILT_THRESHOLD,
+    LEGACY_CONF_VASISTAS_POSITION_LIMIT,
 )
 from .window import WindowTracker
 
@@ -61,6 +63,17 @@ def _split_tilt_threshold(values: dict) -> dict:
     return migrated
 
 
+def _rename_vasistas_limit(values: dict) -> dict:
+    """1.2 -> 1.3: vasistas_position_limit is now tilted_position_limit.
+    Same value under the new name."""
+    if LEGACY_CONF_VASISTAS_POSITION_LIMIT not in values:
+        return values
+    migrated = dict(values)
+    limit = migrated.pop(LEGACY_CONF_VASISTAS_POSITION_LIMIT)
+    migrated.setdefault(CONF_TILTED_POSITION_LIMIT, limit)
+    return migrated
+
+
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if entry.version > 1:
         # Written by a newer release than this one: don't guess.
@@ -73,6 +86,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             minor_version=2,
         )
         _LOGGER.debug("Smart Cover: migrated %s to 1.2", entry.title)
+    if entry.minor_version < 3:
+        hass.config_entries.async_update_entry(
+            entry,
+            data=_rename_vasistas_limit(dict(entry.data)),
+            options=_rename_vasistas_limit(dict(entry.options)),
+            minor_version=3,
+        )
+        _LOGGER.debug("Smart Cover: migrated %s to 1.3", entry.title)
     return True
 
 

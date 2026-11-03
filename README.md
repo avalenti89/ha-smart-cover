@@ -33,19 +33,40 @@ rain/window state.
   configurable:
   - window fully open (casement) — water gets in, so the cover is kept
     almost shut (`rain_position_limit`, default 15%);
-  - window at vasistas (tilted past the configurable vertical reading + tolerance) — the gap
-    is up high, so the cover may sit higher (`vasistas_position_limit`,
+  - window tilted (rotated past the configurable vertical reading + tolerance) — the gap
+    is up high, so the cover may sit higher (`tilted_position_limit`,
     default 40%);
   - window closed — water never gets in, no limit at all.
 
   A window whose position can't be determined (no sensor, sensor
-  unavailable, or a vasistas with no tilt sensor to detect it) gets the
+  unavailable, or a tilted window with no tilt sensor to detect it) gets the
   strictest limit. The limit never raises a cover: one already more
   closed than the limit is left where it is. Protection lasts only
   while it is needed: when the limit relaxes (rain stops, or the window
-  goes from fully open to vasistas), a cover the limit pulled down goes
+  goes from fully open to tilted), a cover the limit pulled down goes
   back to exactly where it was, or as far as the new limit allows. A
   manual command in the meantime, or a newer `request_position`, wins.
+- Manual window position (`window_manual`, off by default): for a window
+  whose sensor is broken or missing, the sensors can be ignored and the
+  position set by hand instead — from the card's Closed / Tilted / Open
+  buttons or with `smart_cover.set_window_position`. It drives the rain
+  limits and the window position sensor exactly as a sensor reading
+  would, until you change it.
+- Window sensor alerts: a window or tilt sensor that is unavailable for
+  15 minutes, or has not reported for `sensor_silence_hours` (default
+  12), counts as offline. Silence matters because battery sensors such as
+  BTHome / Shelly BLU never turn unavailable: when the battery dies they
+  just keep showing their last state. An offline sensor always raises a
+  repair issue, optionally a persistent notification
+  (`notify_persistent`, on by default), and fires a
+  `smart_cover_notification` event with Companion-app style `title` /
+  `message` / `data` (with a `tag`) — phones are left to an automation,
+  see below. When the sensor is back, all of it is withdrawn, and the
+  event fires again with message `clear_notification` and the same tag,
+  which withdraws the phone notification too. The silence count survives
+  restarts: the timestamps Home Assistant gives restored states are not
+  mistaken for a report. The window position sensor lists the offline
+  ones in its `offline_sensors` attribute.
 - Manual recalibration (`recalibrate_manual`) and automation-driven
   recalibration (`request_recalibration`) — the latter is skipped
   automatically when disabled or when it's unsafe to move the cover.
@@ -119,18 +140,21 @@ instance = one physical cover.
 |---|---|---|
 | Name | yes | Display name for this smart cover. |
 | Physical cover to wrap | yes | The existing `cover.*` entity to control. |
+| Set window position by hand | no | Ignore the window and tilt sensors and set the window position by hand, from the card or with `smart_cover.set_window_position`. When first turned on, it starts from the position the sensors last reported. Default: off. |
 | Window sensor | no | `binary_sensor.*` for the room's window (open/closed). Decides which rain limit applies. If left empty, the strictest one always applies. |
-| Tilt sensor | no | Numeric rotation sensor for the same window, to detect a tilted/vasistas opening. Without it vasistas can't be told apart from a fully open window, and the stricter limit applies. |
+| Tilt sensor | no | Numeric rotation sensor for the same window, to detect a tilted opening. Without it a tilted window can't be told apart from a fully open window, and the stricter limit applies. |
 | Tilt with the sash vertical | no | What the tilt sensor reads with the sash vertical (shut, or open as a casement). Default: 0. |
 | Vertical tilt tolerance | no | ± degrees a reading may stray from the vertical value and still count as vertical. Above vertical + tolerance the window is tilted; anything else counts as fully open. Default: 0.2. Entries created before 0.5.0 are migrated to vertical 0 with their old threshold as tolerance, so they classify exactly as before. |
 | Weather entity | no | `weather.*` entity to read for rain detection. Only used when "Manual weather condition" below is set to `sensor`. |
 | Manual weather condition | no | Either a fixed weather condition (sunny, rainy, cloudy, ...) set by hand, or the special value `sensor` to read "Weather entity" above live instead. `sensor` is only offered as a choice once a weather entity is set. A fixed condition only changes when you edit it here via "Configure". Default: `sunny`. |
 | Rain position limit | no | Maximum FINAL/perceived opening (%) allowed while it's raining and the window is fully open, or its position is unknown — see calibration note above. Default: 15. |
-| Vasistas position limit | no | Maximum FINAL/perceived opening (%) allowed while it's raining and the window is at vasistas. Only offered when a tilt sensor is set. Default: 40. |
+| Tilted position limit | no | Maximum FINAL/perceived opening (%) allowed while it's raining and the window is tilted. Only offered when a tilt sensor is set or the window position is set by hand. Default: 40. Called `vasistas_position_limit` before 0.6.0; existing entries are migrated automatically. |
 | Closed-position offset | no | Extra sealing travel (%) below where the cover looks closed. Shifts this entity's own 0-100% scale — see Features above. Default: 0. |
 | Preset percentages | no | Comma-separated quick-access position buttons shown on the dashboard card, e.g. `0, 25, 50, 75, 100`. Used unless the card itself sets its own `presets:` (see Dashboard card below). Default: `0, 25, 50, 75, 100`. |
 | Auto-recalibrate after a restart | no | After a genuine HA restart, run a full recalibration cycle on the first "long" automatic move (`request_position`) — see Features above. Default: on. |
 | Restart recalibration threshold | no | How far (%) that first automatic move must be from the current position to trigger the post-restart recalibration. Default: 25. |
+| Hours of silence before a sensor counts as offline | no | A window/tilt sensor that has not reported for this long counts as offline — see Window sensor alerts above. Raise it where healthy sensors stay quiet for long (windows shut all winter). 0 = only an unavailable sensor counts. Default: 12. |
+| Notification in Home Assistant | no | Show a persistent notification for an offline sensor, on top of the repair issue. Default: on. |
 | Recalibration step duration | no | Seconds each stage of a recalibration cycle (close fully, open fully, return) waits, whatever position HA believes the cover is at: the point of recalibrating is that this belief may be wrong (HA thinks 5%, the shutter is really at 90%), so each stage must allow a full end-to-end run. Set it a little above your cover's full travel time. Default: 30. |
 
 All fields can be changed later via the integration's "Configure" button.
@@ -150,8 +174,28 @@ the full list:
 | `smart_cover.recalibrate_manual` | Recalibrate now, ignoring toggles and rain limits. |
 | `smart_cover.ramp_to_position` | Move gradually to a position by a given time, in steps. |
 | `smart_cover.close_completely` | Reach the true physical 0% (sealed), regardless of the closed-position offset. |
+| `smart_cover.set_window_position` | Set the window position (`closed` / `tilted` / `open`) by hand. Only accepted when "Set window position by hand" is on. |
 | `smart_cover.activate_rain_protection` | Apply the rain limit for the current window position right now, whatever the weather. |
 | `smart_cover.set_recalibration_enabled` / `set_rain_control_enabled` | Runtime toggles. |
+
+## Events
+
+`smart_cover_notification` fires when a window sensor goes offline and
+again when it is back (see Window sensor alerts above). Its `title`,
+`message` and `data` are ready for `notify.mobile_app_*`:
+
+```yaml
+automation:
+  - triggers:
+      - trigger: event
+        event_type: smart_cover_notification
+    actions:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "{{ trigger.event.data.title }}"
+          message: "{{ trigger.event.data.message }}"
+          data: "{{ trigger.event.data.data }}"
+```
 
 ## Dashboard card
 
@@ -167,7 +211,9 @@ Shows: a header (click it to open the entity's native cover "more info"
 popup — history, and Home Assistant's own open/close/position UI), a stop
 button + slider + numeric input (type a percentage directly), a "Seal"
 button (`close_completely`) followed by the position preset buttons,
-rain/window status, and the two toggles + two manual actions this
+rain/window status (click the window status to open the window position
+sensor; with the window position set by hand, Closed / Tilted / Open
+buttons appear below it), and the two toggles + two manual actions this
 integration adds. This card is the only way to reach those last three —
 Home Assistant's built-in popups can't be extended with custom rows.
 

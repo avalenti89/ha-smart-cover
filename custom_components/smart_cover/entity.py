@@ -32,6 +32,8 @@ from homeassistant.core import (
     HomeAssistant,
     callback,
 )
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -46,7 +48,7 @@ from .const import (
     CONF_RECALIBRATION_STEP_SECONDS,
     CONF_RESTART_RECALIBRATION_MIN_DELTA,
     CONF_TARGET_COVER,
-    CONF_VASISTAS_POSITION_LIMIT,
+    CONF_TILTED_POSITION_LIMIT,
     CONF_WEATHER_ENTITY,
     DEFAULT_AUTO_RECALIBRATE_ON_RESTART,
     DEFAULT_CLOSED_POSITION_OFFSET,
@@ -56,7 +58,7 @@ from .const import (
     DEFAULT_RAMP_STEPS,
     DEFAULT_RECALIBRATION_STEP_SECONDS,
     DEFAULT_RESTART_RECALIBRATION_MIN_DELTA,
-    DEFAULT_VASISTAS_POSITION_LIMIT,
+    DEFAULT_TILTED_POSITION_LIMIT,
     DOMAIN,
     MANUAL_CONDITION_SENSOR,
     MIN_RAMP_STEP_SIZE,
@@ -117,8 +119,8 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         self._rain_position_limit: int = int(
             data.get(CONF_RAIN_POSITION_LIMIT, DEFAULT_RAIN_POSITION_LIMIT)
         )
-        self._vasistas_position_limit: int = int(
-            data.get(CONF_VASISTAS_POSITION_LIMIT, DEFAULT_VASISTAS_POSITION_LIMIT)
+        self._tilted_position_limit: int = int(
+            data.get(CONF_TILTED_POSITION_LIMIT, DEFAULT_TILTED_POSITION_LIMIT)
         )
         self._closed_position_offset: int = int(
             data.get(CONF_CLOSED_POSITION_OFFSET, DEFAULT_CLOSED_POSITION_OFFSET)
@@ -236,7 +238,7 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             "recalibration_enabled": self._recalibration_enabled,
             "rain_control_enabled": self._rain_control_enabled,
             "rain_position_limit": self._rain_position_limit,
-            "vasistas_position_limit": self._vasistas_position_limit,
+            "tilted_position_limit": self._tilted_position_limit,
             # The cap actually in force right now, or None when nothing
             # is capping the cover (not raining, rain control off, or
             # the window is closed). Saves anyone debugging from having
@@ -261,6 +263,13 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
             # window sensor entity (sensor.py), which is what new
             # automations should trigger on.
             "window_position": self._window_position,
+            # True when the window position is set by hand
+            # (set_window_position) instead of read off the sensors: the
+            # card then shows buttons to set it.
+            "window_manual": self._window.manual,
+            # The window sensor entity, for the card to link to; None if
+            # this cover has none.
+            "window_position_entity": self._window_position_entity,
             # LEGACY (do not remove). The settled view under its
             # original names, mirrored from the same WindowTracker that
             # feeds the window sensor entity: this entity's state,
@@ -489,8 +498,8 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
     #
     #   window open (casement) -> water gets in -> rain_position_limit,
     #       which keeps the cover almost shut.
-    #   window vasistas        -> the gap is up high, so the cover can
-    #       sit higher -> vasistas_position_limit.
+    #   window tilted          -> the gap is up high, so the cover can
+    #       sit higher -> tilted_position_limit.
     #   window closed          -> water never gets in -> no cap.
     #
     # _window_position decides which of the three applies;
@@ -504,9 +513,9 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         whether it's currently raining and whether rain control is on.
         None means "no cap" (window closed).
 
-        Anything we can't positively identify as closed or vasistas
+        Anything we can't positively identify as closed or tilted
         falls through to the strictest cap: no window_sensor at all, a
-        sensor that is unavailable/unknown, or a vasistas we have no
+        sensor that is unavailable/unknown, or a tilted window we have no
         tilt_sensor to detect. Guessing wrong in the other direction
         would leave the cover open onto a window letting water in.
         """
@@ -514,7 +523,7 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         if position == "closed":
             return None
         if position == "tilted":
-            return self._vasistas_position_limit
+            return self._tilted_position_limit
         return self._rain_position_limit
 
     @property
@@ -528,8 +537,8 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
 
     @property
     def _window_position(self) -> str:
-        """The window's position right now: "closed", "tilted"
-        (vasistas), "open" (fully/casement open) or "unknown".
+        """The window's position right now: "closed", "tilted", "open"
+        (fully/casement open) or "unknown".
 
         Instantaneous on purpose, and deliberately NOT the settled
         position the window sensor entity publishes: rain protection has
@@ -538,6 +547,14 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         is one definition of it rather than one per consumer.
         """
         return self._window.raw_position
+
+    @property
+    def _window_position_entity(self) -> str | None:
+        """entity_id of this cover's window sensor (sensor.py), looked up
+        by its unique_id so a rename in the UI is followed."""
+        return er.async_get(self.hass).async_get_entity_id(
+            "sensor", DOMAIN, f"{DOMAIN}_{self._target_cover}_window_position"
+        )
 
     @property
     def _window_position_stable(self) -> str | None:
@@ -609,7 +626,7 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         #
         # 1. Clamp DOWN if the current position is no longer safe under
         #    the limit now in force (rain just started, or exposure
-        #    worsened — window went from vasistas to fully open), first
+        #    worsened — window went from tilted to fully open), first
         #    remembering where the cover was as the position to go back
         #    to. An outstanding request_position ask is newer intent and
         #    is kept instead; so is a running ramp's, which caps its own
@@ -979,6 +996,20 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         if enabled:
             await self._async_enforce_rain_limit()
 
+    async def async_set_window_position(self, position: str) -> None:
+        """Sets the window position by hand, for a window whose sensor is
+        broken or missing. Only with window_manual on: otherwise the
+        sensors would overwrite it at their next report, so it is refused
+        rather than silently lost. The tracker notifies this entity, which
+        re-runs the rain check as for any window change."""
+        if not self._window.manual:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="window_not_manual",
+                translation_placeholders={"entity_id": self.entity_id},
+            )
+        self._window.set_manual_position(position)
+
     async def async_activate_rain_protection(self) -> None:
         """Immediately applies the rain limit the window's position
         calls for (a FINAL/calibrated value — see
@@ -1043,7 +1074,7 @@ class SmartCoverEntity(CoverEntity, RestoreEntity):
         cap exists to prevent).
 
         Re-read at every step, so a ramp that starts under an open
-        window and continues after it's put on vasistas rises to the
+        window and continues after it's put on tilt rises to the
         looser cap on its own. Only opening is capped: a step that is
         MORE CLOSED than the limit is passed through untouched, since
         closing further never lets water in.

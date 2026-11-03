@@ -14,8 +14,9 @@
         "sections": {
           "window": {
             "name": "Window sensors",
-            "description": "Which sensors tell this cover whether the room's window is closed, at vasistas or fully open. That position decides which rain cap applies.",
+            "description": "Which sensors tell this cover whether the room's window is closed, tilted or fully open. That position decides which rain cap applies.",
             "data": {
+              "window_manual": "Set window position by hand",
               "window_sensor": "Window open/close sensor (optional)",
               "tilt_sensor": "Window rotation/tilt sensor (optional)",
               "tilt_closed_value": "Tilt with the sash vertical (degrees)",
@@ -23,11 +24,12 @@
               "window_debounce": "Anti-bounce time (seconds)"
             },
             "data_description": {
+              "window_manual": "Ignore the sensors below and set the window position by hand, from the card (Closed / Tilted / Open) or with the set_window_position service. Useful when the sensor is broken or missing. The position you set drives the rain caps and the window position sensor until you change it. Currently: {current_window_manual}",
               "window_sensor": "Binary_sensor for the open/close state of the room's window. Decides which of the rain caps applies to the cover. If left empty, the strictest cap (fully open window) always applies. Currently: {current_window_sensor}",
-              "tilt_sensor": "Numeric rotation/tilt sensor (in degrees) for the same window, to recognize a tilted/vasistas opening, which gets its own, looser rain cap than a fully open window. Also uses the two tilt settings below. Without this sensor vasistas can't be detected and the fully-open cap applies. Currently: {current_tilt_sensor}",
+              "tilt_sensor": "Numeric rotation/tilt sensor (in degrees) for the same window, to recognize a tilted opening, which gets its own, looser rain cap than a fully open window. Also uses the two tilt settings below. Without this sensor a tilted window can't be detected and the fully-open cap applies. Currently: {current_tilt_sensor}",
               "tilt_closed_value": "What the rotation sensor reads with the sash vertical: window shut, or fully open as a casement. Ignored if no tilt sensor is set. Currently: {current_tilt_closed_value}",
-              "tilt_tolerance": "How far a reading may stray from the vertical value and still count as vertical. Any reading above vertical + tolerance is vasistas; anything else counts as fully open (the stricter rain cap). Currently: {current_tilt_tolerance}",
-              "window_debounce": "How long a new window position must hold before the window position sensor adopts it. Shorter excursions are treated as part of a manoeuvre and leave no trace — which is what lets \"vasistas -> open\" be recognized despite the few seconds of closure it physically requires, and what absorbs a bouncing reed contact. Does NOT delay rain protection, which always reacts to the instantaneous position. 0 disables the debounce. Currently: {current_window_debounce}"
+              "tilt_tolerance": "How far a reading may stray from the vertical value and still count as vertical. Any reading above vertical + tolerance is tilted; anything else counts as fully open (the stricter rain cap). Currently: {current_tilt_tolerance}",
+              "window_debounce": "How long a new window position must hold before the window position sensor adopts it. Shorter excursions are treated as part of a manoeuvre and leave no trace — which is what lets \"tilted -> open\" be recognized despite the few seconds of closure it physically requires, and what absorbs a bouncing reed contact. Does NOT delay rain protection, which always reacts to the instantaneous position. 0 disables the debounce. Currently: {current_window_debounce}"
             }
           },
           "rain": {
@@ -37,13 +39,13 @@
               "weather_entity": "Weather entity (weather.*, optional — takes priority over the manual condition if set)",
               "manual_weather_condition": "Manual weather condition (or \"sensor\" to read the weather entity above instead)",
               "rain_position_limit": "Max opening while raining — window fully open (%)",
-              "vasistas_position_limit": "Max opening while raining — window vasistas (%)"
+              "tilted_position_limit": "Max opening while raining — window tilted (%)"
             },
             "data_description": {
               "weather_entity": "A weather.* entity (e.g. weather.home) to read the current weather condition from directly. If set, it takes PRIORITY over the manual condition below — lets you pick a different weather source per cover. Currently: {current_weather_entity}",
               "manual_weather_condition": "Pick a fixed weather condition by hand, OR pick \"sensor\" to read weather_entity above instead (only offered once weather_entity is set). A fixed condition only changes when you edit it here via \"Configure\". Currently: {current_manual_weather_condition}",
               "rain_position_limit": "Maximum opening the cover is allowed while it's raining and the window is fully open (casement), or its position can't be determined: water gets in, so the cover is kept almost shut. A FINAL/calibrated value. With the window closed no cap applies at all. Currently: {current_rain_position_limit}",
-              "vasistas_position_limit": "Maximum opening the cover is allowed while it's raining and the window is at vasistas (top-hung): the gap is up high, so the cover may sit higher than with a fully open window. A FINAL/calibrated value. Only shown when a tilt sensor is configured, otherwise vasistas can't be detected. Currently: {current_vasistas_position_limit}"
+              "tilted_position_limit": "Maximum opening the cover is allowed while it's raining and the window is tilted: the gap is up high, so the cover may sit higher than with a fully open window. A FINAL/calibrated value. Only shown when a tilt sensor is configured or the window position is set by hand, otherwise a tilted window can't be detected. Currently: {current_tilted_position_limit}"
             }
           },
           "positions": {
@@ -62,6 +64,18 @@
               "auto_recalibrate_on_restart": "After Home Assistant restarts (e.g. a power outage), run a full recalibration cycle the first time an automation asks this cover for a wide move — catches a motor that may have drifted out of sync while HA was down. Only the automation-facing request_position service can trigger this; manual open/close/position commands never do. Also respects the \"recalibration enabled\" runtime toggle. Currently: {current_auto_recalibrate_on_restart}",
               "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}",
               "recalibration_step_seconds": "How long each stage of a recalibration cycle (close fully, open fully, return) waits, whatever position Home Assistant believes the cover is at. The point of a recalibration is that this belief may be wrong (e.g. HA thinks 5% while the shutter is really at 90%): each stage must give the motor time for a full end-to-end run. Set it a little above your cover's full travel time. Currently: {current_recalibration_step_seconds}"
+            }
+          },
+          "alerts": {
+            "name": "Window sensor alerts",
+            "description": "What happens when one of the window sensors stops responding, usually because its battery is flat. For phones, an automation can forward the smart_cover_notification event (title, message, data).",
+            "data": {
+              "sensor_silence_hours": "Hours of silence before a sensor counts as offline",
+              "notify_persistent": "Notification in Home Assistant"
+            },
+            "data_description": {
+              "sensor_silence_hours": "A sensor that has not reported for this long counts as offline. Needed for battery sensors that never turn unavailable (BTHome, e.g. Shelly BLU): when the battery dies they keep showing their last state. How long a healthy sensor stays quiet depends on the device and the season: with windows shut all winter, raise it. 0 = only an unavailable sensor counts. Currently: {current_sensor_silence_hours}",
+              "notify_persistent": "Also show a notification in Home Assistant, on top of the repair issue that is always raised. Withdrawn on its own when the sensor is back. Currently: {current_notify_persistent}"
             }
           }
         }
@@ -87,8 +101,9 @@
         "sections": {
           "window": {
             "name": "Window sensors",
-            "description": "Which sensors tell this cover whether the room's window is closed, at vasistas or fully open. That position decides which rain cap applies.",
+            "description": "Which sensors tell this cover whether the room's window is closed, tilted or fully open. That position decides which rain cap applies.",
             "data": {
+              "window_manual": "Set window position by hand",
               "window_sensor": "Window open/close sensor (optional)",
               "tilt_sensor": "Window rotation/tilt sensor (optional)",
               "tilt_closed_value": "Tilt with the sash vertical (degrees)",
@@ -96,11 +111,12 @@
               "window_debounce": "Anti-bounce time (seconds)"
             },
             "data_description": {
+              "window_manual": "Ignore the sensors below and set the window position by hand, from the card (Closed / Tilted / Open) or with the set_window_position service. Useful when the sensor is broken or missing. The position you set drives the rain caps and the window position sensor until you change it. Currently: {current_window_manual}",
               "window_sensor": "Binary_sensor for the open/close state of the room's window. Decides which of the rain caps applies to the cover. If left empty, the strictest cap (fully open window) always applies. Currently: {current_window_sensor}",
-              "tilt_sensor": "Numeric rotation/tilt sensor (in degrees) for the same window, to recognize a tilted/vasistas opening, which gets its own, looser rain cap than a fully open window. Also uses the two tilt settings below. Without this sensor vasistas can't be detected and the fully-open cap applies. Currently: {current_tilt_sensor}",
+              "tilt_sensor": "Numeric rotation/tilt sensor (in degrees) for the same window, to recognize a tilted opening, which gets its own, looser rain cap than a fully open window. Also uses the two tilt settings below. Without this sensor a tilted window can't be detected and the fully-open cap applies. Currently: {current_tilt_sensor}",
               "tilt_closed_value": "What the rotation sensor reads with the sash vertical: window shut, or fully open as a casement. Ignored if no tilt sensor is set. Currently: {current_tilt_closed_value}",
-              "tilt_tolerance": "How far a reading may stray from the vertical value and still count as vertical. Any reading above vertical + tolerance is vasistas; anything else counts as fully open (the stricter rain cap). Currently: {current_tilt_tolerance}",
-              "window_debounce": "How long a new window position must hold before the window position sensor adopts it. Shorter excursions are treated as part of a manoeuvre and leave no trace — which is what lets \"vasistas -> open\" be recognized despite the few seconds of closure it physically requires, and what absorbs a bouncing reed contact. Does NOT delay rain protection, which always reacts to the instantaneous position. 0 disables the debounce. Currently: {current_window_debounce}"
+              "tilt_tolerance": "How far a reading may stray from the vertical value and still count as vertical. Any reading above vertical + tolerance is tilted; anything else counts as fully open (the stricter rain cap). Currently: {current_tilt_tolerance}",
+              "window_debounce": "How long a new window position must hold before the window position sensor adopts it. Shorter excursions are treated as part of a manoeuvre and leave no trace — which is what lets \"tilted -> open\" be recognized despite the few seconds of closure it physically requires, and what absorbs a bouncing reed contact. Does NOT delay rain protection, which always reacts to the instantaneous position. 0 disables the debounce. Currently: {current_window_debounce}"
             }
           },
           "rain": {
@@ -110,13 +126,13 @@
               "weather_entity": "Weather entity (weather.*, optional — takes priority over the manual condition if set)",
               "manual_weather_condition": "Manual weather condition (or \"sensor\" to read the weather entity above instead)",
               "rain_position_limit": "Max opening while raining — window fully open (%)",
-              "vasistas_position_limit": "Max opening while raining — window vasistas (%)"
+              "tilted_position_limit": "Max opening while raining — window tilted (%)"
             },
             "data_description": {
               "weather_entity": "A weather.* entity (e.g. weather.home) to read the current weather condition from directly. If set, it takes PRIORITY over the manual condition below — lets you pick a different weather source per cover. Currently: {current_weather_entity}",
               "manual_weather_condition": "Pick a fixed weather condition by hand, OR pick \"sensor\" to read weather_entity above instead (only offered once weather_entity is set). A fixed condition only changes when you edit it here via \"Configure\". Currently: {current_manual_weather_condition}",
               "rain_position_limit": "Maximum opening the cover is allowed while it's raining and the window is fully open (casement), or its position can't be determined: water gets in, so the cover is kept almost shut. A FINAL/calibrated value. With the window closed no cap applies at all. Currently: {current_rain_position_limit}",
-              "vasistas_position_limit": "Maximum opening the cover is allowed while it's raining and the window is at vasistas (top-hung): the gap is up high, so the cover may sit higher than with a fully open window. A FINAL/calibrated value. Only shown when a tilt sensor is configured, otherwise vasistas can't be detected. Currently: {current_vasistas_position_limit}"
+              "tilted_position_limit": "Maximum opening the cover is allowed while it's raining and the window is tilted: the gap is up high, so the cover may sit higher than with a fully open window. A FINAL/calibrated value. Only shown when a tilt sensor is configured or the window position is set by hand, otherwise a tilted window can't be detected. Currently: {current_tilted_position_limit}"
             }
           },
           "positions": {
@@ -136,6 +152,18 @@
               "restart_recalibration_min_delta": "How far (in percentage points) an automation's request_position ask must be from the cover's current position for auto_recalibrate_on_restart to piggyback its recalibration cycle on that request. A smaller post-restart nudge is honored directly, with no recalibration. Ignored once the one-shot post-restart recalibration has already run this session. Currently: {current_restart_recalibration_min_delta}",
               "recalibration_step_seconds": "How long each stage of a recalibration cycle (close fully, open fully, return) waits, whatever position Home Assistant believes the cover is at. The point of a recalibration is that this belief may be wrong (e.g. HA thinks 5% while the shutter is really at 90%): each stage must give the motor time for a full end-to-end run. Set it a little above your cover's full travel time. Currently: {current_recalibration_step_seconds}"
             }
+          },
+          "alerts": {
+            "name": "Window sensor alerts",
+            "description": "What happens when one of the window sensors stops responding, usually because its battery is flat. For phones, an automation can forward the smart_cover_notification event (title, message, data).",
+            "data": {
+              "sensor_silence_hours": "Hours of silence before a sensor counts as offline",
+              "notify_persistent": "Notification in Home Assistant"
+            },
+            "data_description": {
+              "sensor_silence_hours": "A sensor that has not reported for this long counts as offline. Needed for battery sensors that never turn unavailable (BTHome, e.g. Shelly BLU): when the battery dies they keep showing their last state. How long a healthy sensor stays quiet depends on the device and the season: with windows shut all winter, raise it. 0 = only an unavailable sensor counts. Currently: {current_sensor_silence_hours}",
+              "notify_persistent": "Also show a notification in Home Assistant, on top of the repair issue that is always raised. Withdrawn on its own when the sensor is back. Currently: {current_notify_persistent}"
+            }
           }
         }
       }
@@ -151,16 +179,34 @@
         "name": "Window position",
         "state": {
           "closed": "Closed",
-          "tilted": "Vasistas",
+          "tilted": "Tilted",
           "open": "Open"
         }
       }
     }
   },
+  "selector": {
+    "window_position": {
+      "options": {
+        "closed": "Closed",
+        "tilted": "Tilted",
+        "open": "Open"
+      }
+    }
+  },
+  "exceptions": {
+    "window_not_manual": {
+      "message": "The window position of {entity_id} is read from its sensors. To set it by hand, turn on \"Set window position by hand\" in the cover's options."
+    }
+  },
   "issues": {
     "window_sensor_unavailable": {
-      "title": "Smart Cover: window sensor unavailable ({name})",
-      "description": "The window sensor(s) configured for {name} have been unavailable for a while: {entities}.\n\nWhile they are missing, the window position reads as unknown and rain protection falls back to its strictest limit, so the cover may be kept lower than usual. The recalibration and position services keep working.\n\nCheck the device (battery, connection) or remove the sensor from this cover's options if it no longer exists. This message disappears on its own once the sensor reports again."
+      "title": "Smart Cover: window sensor not responding ({name})",
+      "description": "The window sensor(s) configured for {name} are unavailable, or have not reported for longer than this cover allows: {entities}.\n\nUntil they are back, the window position may be wrong or unknown. When unknown, rain protection falls back to its strictest limit, so the cover may be kept lower than usual. The recalibration and position services keep working.\n\nCheck the device (battery, connection) or remove the sensor from this cover's options if it no longer exists. If it is only a sensor that stays quiet for long, raise \"Hours of silence\" under \"Window sensor alerts\". This message disappears on its own once the sensor reports again."
+    },
+    "window_sensor_notification": {
+      "title": "Window sensor offline: {name}",
+      "description": "The window sensor for {name} is not responding (last heard {last_seen}, battery {battery}). Its battery is probably flat. Until it is back, the window position may be wrong: if needed, set it by hand from the cover's card."
     }
   },
   "services": {
@@ -199,6 +245,16 @@
         "enabled": {
           "name": "Enabled",
           "description": "true to enable, false to disable."
+        }
+      }
+    },
+    "set_window_position": {
+      "name": "Set window position",
+      "description": "Sets the window position by hand, for a window whose sensor is broken or missing. Only accepted when the cover's window position is set to manual in its options. Takes effect at once, rain limits included.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Window position."
         }
       }
     },

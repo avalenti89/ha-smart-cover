@@ -31,6 +31,8 @@ from .const import (
     SERVICE_REQUEST_RECALIBRATION,
     SERVICE_SET_RAIN_CONTROL_ENABLED,
     SERVICE_SET_RECALIBRATION_ENABLED,
+    SERVICE_SET_WINDOW_POSITION,
+    WINDOW_POSITION_OPTIONS,
 )
 from .entity import SmartCoverEntity
 
@@ -69,6 +71,11 @@ async def async_setup_entry(
         SERVICE_SET_RAIN_CONTROL_ENABLED,
         {vol.Required(ATTR_ENABLED): bool},
         "async_set_rain_control_enabled",
+    )
+    platform.async_register_entity_service(
+        SERVICE_SET_WINDOW_POSITION,
+        {vol.Required(ATTR_POSITION): vol.In(WINDOW_POSITION_OPTIONS)},
+        "async_set_window_position",
     )
     platform.async_register_entity_service(
         SERVICE_ACTIVATE_RAIN_PROTECTION, {}, "async_activate_rain_protection"

@@ -4,7 +4,9 @@
  * Defines <smart-cover-card>, a regular Lovelace card
  * (type: custom:smart-cover-card) you place on a dashboard. It shows: cover
  * position (via preset buttons + slider + stop, over the native `cover`
- * domain), rain/window status, and the two extra toggles + two extra
+ * domain), rain/window status (the window one links to the window
+ * position sensor, and becomes Closed/Tilted/Open buttons when the
+ * window position is set by hand), and the two extra toggles + two extra
  * actions this integration adds (via the smart_cover.* custom services) —
  * all in one widget, no separate switch/button entities involved.
  *
@@ -40,15 +42,23 @@ const DEFAULT_PRESETS = [0, 25, 50, 75, 100];
 
 // Explicit window positions, as reported by the entity's window_position
 // attribute. Each maps to a different rain cap on the cover (see
-// entity.py): "open" (casement) is the most exposed, "tilted" — the
-// vasistas/top-hung opening — gets a looser cap because the gap is up
-// high, and "closed" gets none at all.
+// entity.py): "open" (casement) is the most exposed, "tilted" — the tilt
+// position of a tilt-and-turn window — gets a looser cap because the gap
+// is up high, and "closed" gets none at all.
 const WINDOW_LABELS = {
   closed: "Window closed",
-  tilted: "Window vasistas",
+  tilted: "Window tilted",
   open: "Window open",
   unknown: "Window unknown",
 };
+
+// Buttons shown when the window position is set by hand (window_manual
+// attribute), in the same order as the window sensor's options.
+const WINDOW_BUTTONS = [
+  { position: "closed", label: "Closed", icon: "mdi:window-closed-variant" },
+  { position: "tilted", label: "Tilted", icon: "mdi:window-open" },
+  { position: "open", label: "Open", icon: "mdi:window-open-variant" },
+];
 
 const STYLE = `
   .sc-root { padding: 16px; }
@@ -153,6 +163,45 @@ const STYLE = `
     color: var(--warning-color, #ff9800);
     font-weight: 500;
   }
+  .sc-window.sc-linked {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 0 4px;
+    margin: 0 -4px;
+  }
+  .sc-window.sc-linked:hover { background: var(--secondary-background-color); }
+  .sc-window-link { --mdc-icon-size: 14px; display: none; }
+  .sc-window.sc-linked .sc-window-link { display: inline-flex; }
+  .sc-window-row {
+    display: none;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .sc-window-row.sc-visible { display: flex; }
+  .sc-window-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 4px;
+    background: var(--secondary-background-color);
+    color: var(--primary-text-color);
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .sc-window-btn ha-icon { --mdc-icon-size: 16px; }
+  .sc-window-btn:hover { filter: brightness(1.1); }
+  .sc-window-btn.active {
+    background: var(--primary-color);
+    color: var(--text-primary-color, #fff);
+  }
   .sc-divider { border-top: 1px solid var(--divider-color); margin: 8px 0; }
   .sc-toggle-row {
     display: flex;
@@ -201,6 +250,10 @@ function contentHtml(presets) {
   const presetButtons = presets
     .map((p) => `<button class="sc-preset" data-position="${p}">${p}%</button>`)
     .join("");
+  const windowButtons = WINDOW_BUTTONS.map(
+    (b) =>
+      `<button class="sc-window-btn" data-window="${b.position}"><ha-icon icon="${b.icon}"></ha-icon>${b.label}</button>`
+  ).join("");
 
   return `
     <div class="sc-header">
@@ -227,9 +280,13 @@ function contentHtml(presets) {
 
     <div class="sc-status">
       <span class="sc-status-item sc-rain"></span>
-      <span class="sc-status-item sc-window"></span>
+      <span class="sc-status-item sc-window" title="Window position sensor">
+        <span class="sc-window-text"></span><ha-icon class="sc-window-link" icon="mdi:open-in-new"></ha-icon>
+      </span>
       <span class="sc-status-item sc-recal-running"></span>
     </div>
+
+    <div class="sc-window-row">${windowButtons}</div>
 
     <div class="sc-divider"></div>
 
@@ -353,19 +410,27 @@ class SmartCoverElementBase extends HTMLElement {
     }
   }
 
-  // Opens Home Assistant's native "more info" dialog for this entity —
-  // the same dialog you'd get clicking the entity anywhere else in the
-  // UI (position/open/close/history). Standard HA event, bubbles up
-  // through the shadow boundary (composed: true) to wherever the
-  // dialog manager is listening.
-  _openMoreInfo() {
+  // Opens Home Assistant's native "more info" dialog for an entity —
+  // this cover by default, or its window sensor — the same dialog you'd
+  // get clicking the entity anywhere else in the UI (state, controls,
+  // history). Standard HA event, bubbles up through the shadow boundary
+  // (composed: true) to wherever the dialog manager is listening.
+  _openMoreInfo(entityId = this._entityId) {
     this.dispatchEvent(
       new CustomEvent("hass-more-info", {
-        detail: { entityId: this._entityId },
+        detail: { entityId },
         bubbles: true,
         composed: true,
       })
     );
+  }
+
+  // The window sensor entity to link to, or null when the cover has none
+  // (or an older entity doesn't publish it).
+  _windowEntity() {
+    const stateObj = this._hass && this._hass.states[this._entityId];
+    const windowEntity = stateObj && stateObj.attributes.window_position_entity;
+    return windowEntity && this._hass.states[windowEntity] ? windowEntity : null;
   }
 
   _renderError(message) {
@@ -385,6 +450,19 @@ class SmartCoverElementBase extends HTMLElement {
     const root = this.shadowRoot;
     root.querySelector(".sc-root").classList.toggle("sc-hide-slider", this._hideSlider);
     root.querySelector(".sc-header").addEventListener("click", () => this._openMoreInfo());
+    // Read at click time: the window sensor's entity_id comes from the
+    // cover's attributes, which _update() keeps current.
+    root.querySelector(".sc-window").addEventListener("click", () => {
+      const windowEntity = this._windowEntity();
+      if (windowEntity) {
+        this._openMoreInfo(windowEntity);
+      }
+    });
+    root.querySelectorAll(".sc-window-btn").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        this._callService("set_window_position", { position: btn.dataset.window })
+      );
+    });
     root.querySelector(".sc-stop").addEventListener("click", () =>
       this._callCoverService("stop_cover", {})
     );
@@ -490,15 +568,25 @@ class SmartCoverElementBase extends HTMLElement {
     rainEl.textContent = attrs.is_raining ? "🌧️ Raining" : "☀️ No rain";
     rainEl.classList.toggle("active", !!attrs.is_raining);
 
-    // User-facing wording only: the explicit position (closed / vasistas /
+    // User-facing wording only: the explicit position (closed / tilted /
     // open). A cached card talking to an older entity, or one whose
     // sensors haven't reported yet, has no window_position — fall back to
     // "unknown" rather than leaving the row blank.
-    const windowEl = root.querySelector(".sc-window");
     const windowPosition = attrs.window_position;
     const windowLabel =
       WINDOW_LABELS[windowPosition] || WINDOW_LABELS.unknown;
-    windowEl.textContent = `🪟 ${windowLabel}`;
+    const manual = !!attrs.window_manual;
+    root.querySelector(".sc-window-text").textContent =
+      `🪟 ${windowLabel}${manual ? " (manual)" : ""}`;
+    root.querySelector(".sc-window").classList.toggle("sc-linked", !!this._windowEntity());
+
+    // The buttons follow the integration's window_manual option: shown
+    // only while the position is set by hand, since otherwise the
+    // service refuses them.
+    root.querySelector(".sc-window-row").classList.toggle("sc-visible", manual);
+    root.querySelectorAll(".sc-window-btn").forEach((btn) => {
+      btn.classList.toggle("active", manual && btn.dataset.window === windowPosition);
+    });
 
     const recalEl = root.querySelector(".sc-recal-running");
     recalEl.textContent = attrs.recalibration_in_progress ? "⏳ Recalibrating…" : "";
